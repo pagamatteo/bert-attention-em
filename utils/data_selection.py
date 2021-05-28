@@ -75,8 +75,8 @@ class Sampler(object):
 
     def get_balanced_data(self, size: int = None, seeds: list = [42, 42]):
 
-        assert isinstance(seeds, list)
-        assert len(seeds) == 2
+        assert isinstance(seeds, list), "Wrong data type for parameter 'seeds'."
+        assert len(seeds) == 2, "Only two classes are supported."
 
         match_seed = seeds[0]
         non_match_seed = seeds[1]
