@@ -184,9 +184,18 @@ if __name__ == '__main__':
 
     uc = "Structured_Fodors-Zagats"
 
+    data_type = 'train'
+    # data_type = 'test'
+    # data_type = 'valid'
+
+    model_name = 'bert-base-uncased'
+    tok = 'sent_pair'
+    # tok = 'attr'
+    # tok = 'attr_pair'
     label_col = 'label'
     left_prefix = 'left_'
     right_prefix = 'right_'
+    max_len = 128
     verbose = False
     permute = False
 
@@ -194,32 +203,40 @@ if __name__ == '__main__':
     data_collector = DataCollector()
     use_case_data_dir = data_collector.get_data(uc)
 
-    model_name = 'bert-base-uncased'
-    max_len = 128
+    # data selection
+    if data_type == 'train':
+        dataset_path = os.path.join(use_case_data_dir, "train.csv")
+    elif data_type == 'test':
+        dataset_path = os.path.join(use_case_data_dir, "test.csv")
+    else:
+        dataset_path = os.path.join(use_case_data_dir, "valid.csv")
 
-    train_dataset_path = os.path.join(use_case_data_dir, "train.csv")
-    train_data = pd.read_csv(train_dataset_path)
-    train_dataset = EMDataset(train_data, model_name, tokenization='sent_pair', label_col=label_col,
-                              left_prefix=left_prefix, right_prefix=right_prefix, max_len=max_len, verbose=verbose,
-                              permute=permute)
+    data = pd.read_csv(dataset_path)
+    dataset = EMDataset(data, model_name, tokenization=tok, label_col=label_col, left_prefix=left_prefix,
+                        right_prefix=right_prefix, max_len=max_len, verbose=verbose, permute=permute)
 
-    val_dataset_path = os.path.join(use_case_data_dir, "valid.csv")
-    val_data = pd.read_csv(val_dataset_path)
-    val_dataset = EMDataset(val_data, model_name, tokenization='sent_pair', label_col=label_col,
-                            left_prefix=left_prefix, right_prefix=right_prefix, max_len=max_len, verbose=verbose,
-                            permute=permute)
+    row = dataset[0]
+    left_entity = None
+    right_entity = None
+    features = None
 
-    test_dataset_path = os.path.join(use_case_data_dir, "test.csv")
-    test_data = pd.read_csv(test_dataset_path)
-    test_dataset = EMDataset(test_data, model_name, tokenization='sent_pair', label_col=label_col,
-                             left_prefix=left_prefix, right_prefix=right_prefix, max_len=max_len, verbose=verbose,
-                             permute=permute)
+    if verbose:
+        left_entity = row[0]
+        right_entity = row[1]
+        features = row[2]
+    else:
+        features = row
 
-    print("FIRST TRAIN EXAMPLE")
-    print(train_dataset[0])
+    assert features is not None
 
-    print("FIRST VALIDATION EXAMPLE")
-    print(val_dataset[0])
+    if left_entity is not None:
+        print(left_entity)
 
-    print("FIRST TEST EXAMPLE")
-    print(test_dataset[0])
+    if right_entity is not None:
+        print(right_entity)
+
+    row_text = dataset.tokenizer.convert_ids_to_tokens(features['input_ids'])
+    row_label = features['labels']
+    print(row_text)
+    print(row_label)
+    print("Num. sentences: {}".format(len(features['token_type_ids'].unique())))
