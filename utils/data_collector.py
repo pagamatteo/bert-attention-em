@@ -120,10 +120,3 @@ class DataCollector(object):
     def get_dm_benchmark(self):
         for use_case in DM_USE_CASES:
             self.get_data(use_case)
-
-
-if __name__ == '__main__':
-    uc = "Structured_Fodors-Zagats"
-
-    data_collector = DataCollector()
-    use_case_dir = data_collector.get_data(uc)

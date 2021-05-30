@@ -1,6 +1,6 @@
 import os
 import pickle
-from transformers import AutoModelForSequenceClassification
+from transformers import AutoModelForSequenceClassification, AutoModel
 import pandas as pd
 import copy
 
@@ -18,8 +18,8 @@ MODELS_DIR = os.path.join(PROJECT_DIR, 'results', 'models')
 RESULTS_DIR = os.path.join(PROJECT_DIR, 'results', 'analysis')
 
 
-def init_test(exp_conf: dict, use_case_data_dir: str, model_name: str, model, label_col: str, left_prefix: str, right_prefix: str, max_len: int):
-
+def init_test(exp_conf: dict, use_case_data_dir: str, model_name: str, model, label_col: str, left_prefix: str,
+              right_prefix: str, max_len: int):
     assert isinstance(exp_conf, dict)
     params = ['permutation', 'data_type', 'analysis_subject', 'test_types', 'samples_seeds', 'tokenization']
     assert all([p in exp_conf for p in params])
@@ -78,18 +78,11 @@ def init_test(exp_conf: dict, use_case_data_dir: str, model_name: str, model, la
     return attn_extractor, {k: v for (k, v) in zip(test_types, testers)}, analyzer
 
 
-def run_experiments(use_case: str, model_path: str, tok: str, save: bool, pretrain: bool, model_name: str = 'bert-base-uncased', label_col: str = 'label',
-         left_prefix: str = 'left_', right_prefix: str = 'right_', max_len: int = 128):
-
+def run_experiments(use_case: str, model: str, tok: str, save: bool, pretrain: bool, model_name: str, label_col: str,
+                    left_prefix: str, right_prefix: str, max_len: int):
     # STEP 0: download the data
     data_collector = DataCollector()
     use_case_data_dir = data_collector.get_data(use_case)
-
-    model = None
-    if pretrain:
-        pass
-    else:
-        model = AutoModelForSequenceClassification.from_pretrained(model_path)
 
     exp_confs = [
         {'id': 0, 'tokenization': tok, 'permutation': False, 'data_type': 'train', 'analysis_subject': 'attr',
@@ -124,13 +117,17 @@ def run_experiments(use_case: str, model_path: str, tok: str, save: bool, pretra
 
         print(exp_conf)
 
-        _, _, analyzer = init_test(exp_conf, use_case_data_dir, model_name, model, label_col, left_prefix, right_prefix, max_len)
+        _, _, analyzer = init_test(exp_conf, use_case_data_dir, model_name, model, label_col, left_prefix, right_prefix,
+                                   max_len)
 
         if pretrain:
-            template_file_name = '{}_PRETRAIN_{}_{}_{}_{}_{}'.format(use_case, exp_conf['data_type'], exp_conf['analysis_subject'], exp_conf['permutation'],
+            template_file_name = '{}_PRETRAIN_{}_{}_{}_{}_{}'.format(use_case, exp_conf['data_type'],
+                                                                     exp_conf['analysis_subject'],
+                                                                     exp_conf['permutation'],
                                                                      exp_conf['tokenization'], exp_conf['exp_id'])
         else:
-            template_file_name = '{}_{}_{}_{}_{}_{}'.format(use_case, exp_conf['data_type'], exp_conf['analysis_subject'], exp_conf['permutation'],
+            template_file_name = '{}_{}_{}_{}_{}_{}'.format(use_case, exp_conf['data_type'],
+                                                            exp_conf['analysis_subject'], exp_conf['permutation'],
                                                             exp_conf['tokenization'], exp_conf['exp_id'])
 
         res_out_file_name = os.path.join(RESULTS_DIR, '{}.pickle'.format(template_file_name))
@@ -202,20 +199,15 @@ def run_experiments(use_case: str, model_path: str, tok: str, save: bool, pretra
                 pickle.dump(avg_res, f)
 
 
-def run_inspection(use_case: str, model_path: str, conf: dict, save: bool, pretrain: bool, model_name: str = 'bert-base-uncased', label_col: str = 'label',
-         left_prefix: str = 'left_', right_prefix: str = 'right_', max_len: int = 128):
-
+def run_inspection(use_case: str, model, conf: dict, save: bool, pretrain: bool,
+                   model_name: str = 'bert-base-uncased', label_col: str = 'label', left_prefix: str = 'left_',
+                   right_prefix: str = 'right_', max_len: int = 128):
     # STEP 0: download the data
     data_collector = DataCollector()
     use_case_data_dir = data_collector.get_data(use_case)
 
-    model = None
-    if pretrain:
-        pass
-    else:
-        model = AutoModelForSequenceClassification.from_pretrained(model_path)
-
-    attn_extractor, testers, analyzer = init_test(conf, use_case_data_dir, model_name, model, label_col, left_prefix, right_prefix, max_len)
+    attn_extractor, testers, analyzer = init_test(conf, use_case_data_dir, model_name, model, label_col, left_prefix,
+                                                  right_prefix, max_len)
 
     inspect_row_idx = 0
 
@@ -274,18 +266,30 @@ if __name__ == '__main__':
     # use_case = "Dirty_DBLP-GoogleScholar"
     # use_case = "Dirty_Walmart-Amazon"
 
-    model_path = os.path.join(MODELS_DIR, 'simple', f"{use_case}_tuned")
     tok = 'sent_pair'
+    # tok = 'attr'
+    # tok = 'attr_pair'
+
+    # fine_tune = None
+    fine_tune = 'simple'
+    # fine_tune = 'advanced'
     save = True
-    pretrain = False
+    model_name = 'bert-base-uncased'
+    label_col = 'label'
+    left_prefix = 'left_'
+    right_prefix = 'right_'
+    max_len = 128
+
+    model_path = os.path.join(MODELS_DIR, fine_tune, f"{use_case}_{tok}_tuned")
+    model = get_model(model_name, fine_tune, model_path)
 
     if test == 'all':
 
-        run_experiments(use_case, model_path, tok, save, pretrain)
+        run_experiments(use_case, model, tok, save, pretrain, model_name, label_col, left_prefix, right_prefix, max_len)
 
     elif test == 'inspection':
 
-        conf = {'id': 0, 'tokenization': tok, 'permutation': False, 'data_type': 'train', 'analysis_subject': 'attr',
+        conf = {'tokenization': tok, 'permutation': False, 'data_type': 'train', 'analysis_subject': 'attr',
                 'test_types': ['attr_attn'], 'samples_seeds': [42, 42]}
 
-        run_inspection(use_case, model_path, conf, save, pretrain)
+        run_inspection(use_case, model_path, conf, save, pretrain, model_name, label_col, left_prefix, right_prefix, max_len)

@@ -103,9 +103,14 @@ if __name__ == '__main__':
 
     uc = "Structured_Fodors-Zagats"
 
+    model_name = 'bert-base-uncased'
+    tok = 'sent_pair'
+    # tok = 'attr'
+    # tok = 'attr_pair'
     label_col = 'label'
     left_prefix = 'left_'
     right_prefix = 'right_'
+    max_len = 128
     verbose = False
     permute = False
 
@@ -113,28 +118,22 @@ if __name__ == '__main__':
     data_collector = DataCollector()
     use_case_data_dir = data_collector.get_data(uc)
 
-    model_name = 'bert-base-uncased'
-    max_len = 128
-
     train_dataset_path = os.path.join(use_case_data_dir, "train.csv")
     train_data = pd.read_csv(train_dataset_path)
-    train_dataset = EMDataset(train_data, model_name, tokenization='sent_pair', label_col=label_col,
-                              left_prefix=left_prefix, right_prefix=right_prefix, max_len=max_len, verbose=verbose,
-                              permute=permute)
+    train_dataset = EMDataset(train_data, model_name, tokenization=tok, label_col=label_col, left_prefix=left_prefix,
+                              right_prefix=right_prefix, max_len=max_len, verbose=verbose, permute=permute)
 
     val_dataset_path = os.path.join(use_case_data_dir, "valid.csv")
     val_data = pd.read_csv(val_dataset_path)
-    val_dataset = EMDataset(val_data, model_name, tokenization='sent_pair', label_col=label_col,
-                            left_prefix=left_prefix, right_prefix=right_prefix, max_len=max_len, verbose=verbose,
-                            permute=permute)
+    val_dataset = EMDataset(val_data, model_name, tokenization=tok, label_col=label_col, left_prefix=left_prefix,
+                            right_prefix=right_prefix, max_len=max_len, verbose=verbose, permute=permute)
 
     test_dataset_path = os.path.join(use_case_data_dir, "test.csv")
     test_data = pd.read_csv(test_dataset_path)
-    test_dataset = EMDataset(test_data, model_name, tokenization='sent_pair', label_col=label_col,
-                             left_prefix=left_prefix, right_prefix=right_prefix, max_len=max_len, verbose=verbose,
-                             permute=permute)
+    test_dataset = EMDataset(test_data, model_name, tokenization=tok, label_col=label_col, left_prefix=left_prefix,
+                             right_prefix=right_prefix, max_len=max_len, verbose=verbose, permute=permute)
 
-    out_model_path = os.path.join(RESULTS_DIR, f"{uc}_tuned")
+    out_model_path = os.path.join(RESULTS_DIR, f"{uc}_{tok}_tuned")
 
     if fit:
         num_epochs = 10

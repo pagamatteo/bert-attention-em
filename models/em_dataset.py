@@ -1,8 +1,9 @@
 import numpy as np
 import torch
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader
 from transformers import AutoTokenizer
 import pandas as pd
+import pytorch_lightning as pl
 
 
 class EMDataset(Dataset):
@@ -178,65 +179,55 @@ class EMDataset(Dataset):
         return left_row, right_row, tokenized_row
 
 
-if __name__ == '__main__':
-    from utils.data_collector import DataCollector
-    import os
+class EMDataModule(pl.LightningDataModule):
 
-    uc = "Structured_Fodors-Zagats"
+    def __init__(self, train_path: str, valid_path: str, test_path: str,
+                 model_name: str, label_col: str = 'label',
+                 left_prefix: str = 'left_', right_prefix: str = 'right_',
+                 max_len: int = 256, train_batch_size: int = 32,
+                 eval_batch_size: int = 32):
+        super().__init__()
 
-    data_type = 'train'
-    # data_type = 'test'
-    # data_type = 'valid'
+        # TODO: check file path existence
 
-    model_name = 'bert-base-uncased'
-    tok = 'sent_pair'
-    # tok = 'attr'
-    # tok = 'attr_pair'
-    label_col = 'label'
-    left_prefix = 'left_'
-    right_prefix = 'right_'
-    max_len = 128
-    verbose = False
-    permute = False
+        self.train = pd.read_csv(train_path)
+        self.valid = pd.read_csv(valid_path)
+        self.test = pd.read_csv(test_path)
+        self.model_name = model_name
+        self.label_col = label_col
+        self.left_prefix = left_prefix
+        self.right_prefix = right_prefix
+        self.max_len = max_len
+        self.train_batch_size = train_batch_size
+        self.eval_batch_size = eval_batch_size
 
-    # download the data
-    data_collector = DataCollector()
-    use_case_data_dir = data_collector.get_data(uc)
+    def setup(self):    # FIXME: update with respect new EMDataset
+        AutoTokenizer.from_pretrained(self.model_name, use_fast=True)
 
-    # data selection
-    if data_type == 'train':
-        dataset_path = os.path.join(use_case_data_dir, "train.csv")
-    elif data_type == 'test':
-        dataset_path = os.path.join(use_case_data_dir, "test.csv")
-    else:
-        dataset_path = os.path.join(use_case_data_dir, "valid.csv")
+        self.train_dataset = EMDataset(
+            self.train, self.model_name, self.label_col, self.left_prefix,
+            self.right_prefix, self.max_len
+        )
 
-    data = pd.read_csv(dataset_path)
-    dataset = EMDataset(data, model_name, tokenization=tok, label_col=label_col, left_prefix=left_prefix,
-                        right_prefix=right_prefix, max_len=max_len, verbose=verbose, permute=permute)
+        self.valid_dataset = EMDataset(
+            self.valid, self.model_name, self.label_col, self.left_prefix,
+            self.right_prefix, self.max_len
+        )
 
-    row = dataset[0]
-    left_entity = None
-    right_entity = None
-    features = None
+        self.test_dataset = EMDataset(
+            self.test, self.model_name, self.label_col, self.left_prefix,
+            self.right_prefix, self.max_len
+        )
 
-    if verbose:
-        left_entity = row[0]
-        right_entity = row[1]
-        features = row[2]
-    else:
-        features = row
+    def train_dataloader(self):
+        return DataLoader(
+            self.train_dataset,
+            batch_size=self.train_batch_size,
+            shuffle=True
+        )
 
-    assert features is not None
+    def val_dataloader(self):
+        return DataLoader(self.valid_dataset, batch_size=self.eval_batch_size)
 
-    if left_entity is not None:
-        print(left_entity)
-
-    if right_entity is not None:
-        print(right_entity)
-
-    row_text = dataset.tokenizer.convert_ids_to_tokens(features['input_ids'])
-    row_label = features['labels']
-    print(row_text)
-    print(row_label)
-    print("Num. sentences: {}".format(len(features['token_type_ids'].unique())))
+    def test_dataloader(self):
+        return DataLoader(self.test_dataset, batch_size=self.eval_batch_size)

@@ -39,17 +39,19 @@ class AttentionExtractor(object):
         assert 'attention_mask' in features, "'attention_mask' not found."
         assert 'token_type_ids' in features, "'token_type_ids' not found."
 
-        input_ids = features['input_ids']
-        attention_mask = features['attention_mask']
-        token_type_ids = features['token_type_ids']
+        input_ids = features['input_ids'].unsqueeze(0)
+        attention_mask = features['attention_mask'].unsqueeze(0)
+        token_type_ids = features['token_type_ids'].unsqueeze(0)
 
         with torch.no_grad():
             outputs = self.model(input_ids=input_ids, attention_mask=attention_mask,
                                  token_type_ids=token_type_ids)
+        if 'logits' not in outputs:
+            preds = None
+        else:
             logits = outputs['logits']
-            attns = outputs['attentions']
-
-        preds = torch.argmax(logits, axis=1)
+            preds = torch.argmax(logits, axis=1)
+        attns = outputs['attentions']
 
         param = {}
         # remove useless features and preserve other features
