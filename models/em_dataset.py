@@ -4,6 +4,7 @@ from torch.utils.data import Dataset, DataLoader
 from transformers import AutoTokenizer
 import pandas as pd
 import pytorch_lightning as pl
+import os
 
 
 class EMDataset(Dataset):
@@ -181,42 +182,58 @@ class EMDataset(Dataset):
 
 class EMDataModule(pl.LightningDataModule):
 
-    def __init__(self, train_path: str, valid_path: str, test_path: str,
-                 model_name: str, label_col: str = 'label',
-                 left_prefix: str = 'left_', right_prefix: str = 'right_',
-                 max_len: int = 256, train_batch_size: int = 32,
-                 eval_batch_size: int = 32):
+    def __init__(self, train_path: str, valid_path: str, test_path: str, model_name: str,
+                 tokenization: str = 'sent_pair', label_col: str = 'label', left_prefix: str = 'left_',
+                 right_prefix: str = 'right_', max_len: int = 256, verbose: bool = False, categories: list = None,
+                 permute: bool = False, seed: int = 42, train_batch_size: int = 32, eval_batch_size: int = 32):
         super().__init__()
 
-        # TODO: check file path existence
+        assert isinstance(train_path, str), "Wrong data type for parameter 'train_path'."
+        assert isinstance(valid_path, str), "Wrong data type for parameter 'valid_path'."
+        assert isinstance(test_path, str), "Wrong data type for parameter 'test_path'."
+        assert os.path.exists(train_path), "Train dataset not found."
+        assert os.path.exists(valid_path), "Validation dataset not found."
+        assert os.path.exists(test_path), "Test dataset not found."
 
         self.train = pd.read_csv(train_path)
         self.valid = pd.read_csv(valid_path)
         self.test = pd.read_csv(test_path)
         self.model_name = model_name
+        self.tokenization = tokenization
         self.label_col = label_col
         self.left_prefix = left_prefix
         self.right_prefix = right_prefix
         self.max_len = max_len
+        self.verbose = verbose
+        self.categories = categories
+        self.permute = permute
+        self.seed = seed
         self.train_batch_size = train_batch_size
         self.eval_batch_size = eval_batch_size
 
-    def setup(self):    # FIXME: update with respect new EMDataset
+        self.train_dataset = None
+        self.valid_dataset = None
+        self.test_dataset = None
+
+    def setup(self):
         AutoTokenizer.from_pretrained(self.model_name, use_fast=True)
 
         self.train_dataset = EMDataset(
-            self.train, self.model_name, self.label_col, self.left_prefix,
-            self.right_prefix, self.max_len
+            self.train, self.model_name, tokenization=self.tokenization, label_col=self.label_col,
+            left_prefix=self.left_prefix, right_prefix=self.right_prefix, max_len=self.max_len, verbose=self.verbose,
+            permute=self.permute, seed=self.seed
         )
 
         self.valid_dataset = EMDataset(
-            self.valid, self.model_name, self.label_col, self.left_prefix,
-            self.right_prefix, self.max_len
+            self.valid, self.model_name, tokenization=self.tokenization, label_col=self.label_col,
+            left_prefix=self.left_prefix, right_prefix=self.right_prefix, max_len=self.max_len, verbose=self.verbose,
+            permute=self.permute, seed=self.seed
         )
 
         self.test_dataset = EMDataset(
-            self.test, self.model_name, self.label_col, self.left_prefix,
-            self.right_prefix, self.max_len
+            self.test, self.model_name, tokenization=self.tokenization, label_col=self.label_col,
+            left_prefix=self.left_prefix, right_prefix=self.right_prefix, max_len=self.max_len, verbose=self.verbose,
+            permute=self.permute, seed=self.seed
         )
 
     def train_dataloader(self):
