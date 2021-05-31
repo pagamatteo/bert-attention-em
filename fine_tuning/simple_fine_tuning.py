@@ -7,6 +7,8 @@ import torch
 from sklearn.metrics import f1_score
 
 from models.em_dataset import EMDataset
+from utils.general import get_dataset
+
 
 PROJECT_DIR = os.path.abspath('..')
 RESULTS_DIR = os.path.join(PROJECT_DIR, 'results', 'models', 'simple')
@@ -95,44 +97,36 @@ def evaluate(model_path: str, eval_dataset: EMDataset):
 
 
 if __name__ == '__main__':
-    from utils.data_collector import DataCollector
-    import os
-    import pandas as pd
 
-    fit = False
+    fit = True
 
-    uc = "Structured_Fodors-Zagats"
+    conf = {
+        'use_case': "Structured_Fodors-Zagats",
+        'model_name': 'bert-base-uncased',
+        'tok': 'sent_pair',  # 'sent_pair', 'attr', 'attr_pair'
+        'label_col': 'label',
+        'left_prefix': 'left_',
+        'right_prefix': 'right_',
+        'max_len': 128,
+        'permute': False,
+        'verbose': False,
+    }
 
-    model_name = 'bert-base-uncased'
-    tok = 'sent_pair'
-    # tok = 'attr'
-    # tok = 'attr_pair'
-    label_col = 'label'
-    left_prefix = 'left_'
-    right_prefix = 'right_'
-    max_len = 128
-    verbose = False
-    permute = False
+    train_conf = conf.copy()
+    train_conf['data_type'] = 'train'
+    train_dataset = get_dataset(train_conf)
 
-    # download the data
-    data_collector = DataCollector()
-    use_case_data_dir = data_collector.get_data(uc)
+    val_conf = conf.copy()
+    val_conf['data_type'] = 'valid'
+    val_dataset = get_dataset(val_conf)
 
-    train_dataset_path = os.path.join(use_case_data_dir, "train.csv")
-    train_data = pd.read_csv(train_dataset_path)
-    train_dataset = EMDataset(train_data, model_name, tokenization=tok, label_col=label_col, left_prefix=left_prefix,
-                              right_prefix=right_prefix, max_len=max_len, verbose=verbose, permute=permute)
+    test_conf = conf.copy()
+    test_conf['data_type'] = 'test'
+    test_dataset = get_dataset(test_conf)
 
-    val_dataset_path = os.path.join(use_case_data_dir, "valid.csv")
-    val_data = pd.read_csv(val_dataset_path)
-    val_dataset = EMDataset(val_data, model_name, tokenization=tok, label_col=label_col, left_prefix=left_prefix,
-                            right_prefix=right_prefix, max_len=max_len, verbose=verbose, permute=permute)
-
-    test_dataset_path = os.path.join(use_case_data_dir, "test.csv")
-    test_data = pd.read_csv(test_dataset_path)
-    test_dataset = EMDataset(test_data, model_name, tokenization=tok, label_col=label_col, left_prefix=left_prefix,
-                             right_prefix=right_prefix, max_len=max_len, verbose=verbose, permute=permute)
-
+    uc = conf['use_case']
+    tok = conf['tok']
+    model_name = conf['model_name']
     out_model_path = os.path.join(RESULTS_DIR, f"{uc}_{tok}_tuned")
 
     if fit:

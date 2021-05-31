@@ -1,8 +1,88 @@
 import pytorch_lightning as pl
-from transformers import AutoModel, AdamW, get_linear_schedule_with_warmup
+from transformers import AutoModel, AdamW, get_linear_schedule_with_warmup, AutoTokenizer
 import torch
 from torch import nn
+from torch.utils.data import DataLoader
 from sklearn.metrics import f1_score
+import os
+import pandas as pd
+from models.em_dataset import EMDataset
+from tqdm import tqdm
+from utils.data_collector import DataCollector
+
+
+PROJECT_DIR = os.path.abspath('..')
+RESULTS_DIR = os.path.join(PROJECT_DIR, 'results', 'models', 'advanced')
+
+
+class EMDataModule(pl.LightningDataModule):
+
+    def __init__(self, train_path: str, valid_path: str, test_path: str, model_name: str,
+                 tokenization: str = 'sent_pair', label_col: str = 'label', left_prefix: str = 'left_',
+                 right_prefix: str = 'right_', max_len: int = 256, verbose: bool = False, categories: list = None,
+                 permute: bool = False, seed: int = 42, train_batch_size: int = 32, eval_batch_size: int = 32):
+        super().__init__()
+
+        assert isinstance(train_path, str), "Wrong data type for parameter 'train_path'."
+        assert isinstance(valid_path, str), "Wrong data type for parameter 'valid_path'."
+        assert isinstance(test_path, str), "Wrong data type for parameter 'test_path'."
+        assert os.path.exists(train_path), "Train dataset not found."
+        assert os.path.exists(valid_path), "Validation dataset not found."
+        assert os.path.exists(test_path), "Test dataset not found."
+
+        self.train = pd.read_csv(train_path)
+        self.valid = pd.read_csv(valid_path)
+        self.test = pd.read_csv(test_path)
+        self.model_name = model_name
+        self.tokenization = tokenization
+        self.label_col = label_col
+        self.left_prefix = left_prefix
+        self.right_prefix = right_prefix
+        self.max_len = max_len
+        self.verbose = verbose
+        self.categories = categories
+        self.permute = permute
+        self.seed = seed
+        self.train_batch_size = train_batch_size
+        self.eval_batch_size = eval_batch_size
+
+        self.train_dataset = None
+        self.valid_dataset = None
+        self.test_dataset = None
+
+    def setup(self):
+        AutoTokenizer.from_pretrained(self.model_name, use_fast=True)
+
+        self.train_dataset = EMDataset(
+            self.train, self.model_name, tokenization=self.tokenization, label_col=self.label_col,
+            left_prefix=self.left_prefix, right_prefix=self.right_prefix, max_len=self.max_len, verbose=self.verbose,
+            permute=self.permute, seed=self.seed
+        )
+
+        self.valid_dataset = EMDataset(
+            self.valid, self.model_name, tokenization=self.tokenization, label_col=self.label_col,
+            left_prefix=self.left_prefix, right_prefix=self.right_prefix, max_len=self.max_len, verbose=self.verbose,
+            permute=self.permute, seed=self.seed
+        )
+
+        self.test_dataset = EMDataset(
+            self.test, self.model_name, tokenization=self.tokenization, label_col=self.label_col,
+            left_prefix=self.left_prefix, right_prefix=self.right_prefix, max_len=self.max_len, verbose=self.verbose,
+            permute=self.permute, seed=self.seed
+        )
+
+    def train_dataloader(self):
+        return DataLoader(
+            self.train_dataset,
+            batch_size=self.train_batch_size,
+            shuffle=True
+        )
+
+    def val_dataloader(self):
+        return DataLoader(self.valid_dataset, batch_size=self.eval_batch_size)
+
+    def test_dataloader(self):
+        return DataLoader(self.test_dataset, batch_size=self.eval_batch_size)
 
 
 class MatcherTransformer(pl.LightningModule):
@@ -20,8 +100,7 @@ class MatcherTransformer(pl.LightningModule):
         # save hyper parameters in the hparams attribute of the model
         self.save_hyperparameters()
 
-        self.model = AutoModel.from_pretrained(model_name, output_hidden_states=True,
-                                               output_attentions=True)
+        self.model = AutoModel.from_pretrained(model_name, output_hidden_states=True, output_attentions=True)
         self.dropout = nn.Dropout(self.model.config.hidden_dropout_prob)
         self.classifier = nn.Linear(self.model.config.hidden_size, num_labels)
 
@@ -147,28 +226,48 @@ class MatcherTransformer(pl.LightningModule):
         return [optimizer], [scheduler]
 
 
-def classify(test_loader, model):
+def train(model_name: str, num_epochs: int, dm: EMDataModule, out_model_path: str = None, gpus: int = 1):
+
+    print("Starting fine tuning the model...")
+    pl.seed_everything(42)
+
+    # fine-tuning the transformer
+    model = MatcherTransformer(model_name, max_epochs=num_epochs)
+    trainer = pl.Trainer(deterministic=True, gpus=gpus, progress_bar_refresh_rate=30, max_epochs=num_epochs)
+    trainer.fit(model, dm.train_dataloader(), dm.val_dataloader())
+
+    # # check results
+    # %load_ext tensorboard
+    # %tensorboard --logdir ./lightning_logs
+
+    # save the model
+    if out_model_path is not None:
+        trainer.save_checkpoint(out_model_path)
+
+
+def evaluate(out_model_path: str, eval_loader: DataLoader):
+
+    print("Loading pre-trained model...")
+    model = MatcherTransformer.load_from_checkpoint(checkpoint_path=out_model_path)
+
     model.eval()
 
     preds = torch.empty(0)
     labels = torch.empty(0)
-    num_batches = len(test_loader)
-    ix = 1
-    for test_batch in test_loader:
-        print("{}/{}".format(ix, num_batches))
+    for test_batch in tqdm(eval_loader):
         input_ids = test_batch['input_ids']
         attention_mask = test_batch['attention_mask']
         token_type_ids = test_batch['token_type_ids']
         batch_labels = test_batch['labels']
 
         with torch.no_grad():
-            _, logits, hidden_states, _ = model(input_ids=input_ids, attention_mask=attention_mask,
-                                                token_type_ids=token_type_ids)
+            outputs = model(input_ids=input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids)
+            logits = outputs['logits']
+            # hidden_states = outputs['hidden_states']
+
         batch_preds = torch.argmax(logits, axis=1)
         preds = torch.cat((preds, batch_preds))
         labels = torch.cat((labels, batch_labels))
-
-        ix += 1
 
     average_f1 = f1_score(labels, preds)
     f1_class_scores = f1_score(labels, preds, average=None)
@@ -181,58 +280,42 @@ def classify(test_loader, model):
 
 
 if __name__ == '__main__':
-    # use_case = "Structured/Fodors-Zagats" # v
-    # use_case = "Structured/DBLP-GoogleScholar"
-    # use_case = "Structured/DBLP-ACM" # v
-    # use_case = "Structured/Amazon-Google" # v
-    # use_case = "Structured/Walmart-Amazon" # v
-    # use_case = "Structured/Beer" # v
-    # use_case = "Structured/iTunes-Amazon" # v
-    # use_case = "Textual/Abt-Buy" # v
-    # use_case = "Dirty/iTunes-Amazon" # v
-    # use_case = "Dirty/DBLP-ACM" # v
-    # use_case = "Dirty/DBLP-GoogleScholar"
-    use_case = "Dirty/Walmart-Amazon"  # v
 
-    fine_tuning = False
-    model_out_name = "MatcherTransformer_{}.zip".format(use_case.replace("/", "_"))
-    evaluate = True
+    fit = False
 
-    # get data
+    conf = {
+        'use_case': "Structured_Fodors-Zagats",
+        'model_name': 'bert-base-uncased',
+        'tok': 'sent_pair',  # 'sent_pair', 'attr', 'attr_pair'
+        'label_col': 'label',
+        'left_prefix': 'left_',
+        'right_prefix': 'right_',
+        'max_len': 128,
+        'permute': False,
+        'verbose': False,
+    }
+
     data_collector = DataCollector()
-    use_case_data_dir = data_collector.get_data(use_case)
-    train_path = os.path.join(use_case_data_dir, "train.csv")
-    valid_path = os.path.join(use_case_data_dir, "valid.csv")
-    test_path = os.path.join(use_case_data_dir, "test.csv")
+    use_case_dir = data_collector.get_data(conf['use_case'])
+    train_path = os.path.join(use_case_dir, "train.csv")
+    valid_path = os.path.join(use_case_dir, "valid.csv")
+    test_path = os.path.join(use_case_dir, "test.csv")
 
-    model_name = 'bert-base-uncased'
-    dm = EMDataModule(train_path, valid_path, test_path, model_name, max_len=128)
+    dm = EMDataModule(train_path, valid_path, test_path, conf['model_name'], tokenization=conf['tok'],
+                      label_col=conf['label_col'], left_prefix=conf['left_prefix'], right_prefix=conf['right_prefix'],
+                      max_len=conf['max_len'], verbose=conf['verbose'], permute=conf['permute'])
     dm.setup()
 
-    if fine_tuning:
+    uc = conf['use_case']
+    tok = conf['tok']
+    model_name = conf['model_name']
+    out_model_path = os.path.join(RESULTS_DIR, f"{uc}_{tok}_tuned")
 
-        print("Starting fine tuning the model...")
-        pl.seed_everything(42)
+    if fit:
 
-        N_EPOCHS = 10
-
-        # fine-tuning the transformer
-        model = MatcherTransformer(model_name, max_epochs=N_EPOCHS)
-        trainer = pl.Trainer(deterministic=True, gpus=1, progress_bar_refresh_rate=30, max_epochs=N_EPOCHS)
-        trainer.fit(model, dm.train_dataloader(), dm.val_dataloader())
-
-        # # check results
-        # %load_ext tensorboard
-        # %tensorboard --logdir ./lightning_logs
-
-        # save the model
-        trainer.save_checkpoint(os.path.join(drive_models_out_dir, model_out_name))
+        num_epochs = 2
+        train(model_name, num_epochs, dm, out_model_path=out_model_path, gpus=0)
 
     else:
 
-        print("Loading pre-trained model...")
-        model = MatcherTransformer.load_from_checkpoint(
-            checkpoint_path=os.path.join(drive_models_out_dir, model_out_name))
-
-    if evaluate:
-        classify(dm.test_dataloader(), model)
+        evaluate(out_model_path, dm.test_dataloader())
