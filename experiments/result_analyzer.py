@@ -44,20 +44,20 @@ def cmp_results(res1: dict, res2: dict):
     return cmp_res
 
 
-def get_benchmark_results(exp_conf, use_cases, tuned_res_flag, pretrain_res_flag):
-    assert isinstance(exp_conf, dict)
-    assert "permutation" in exp_conf
-    assert "data_type" in exp_conf
-    assert "analysis_subject" in exp_conf
-    assert "test_types" in exp_conf
-    assert isinstance(use_cases, list)
-    assert len(use_cases) > 0
+def get_benchmark_results(exp_conf: dict, use_cases: list, tuned_res_flag: bool, pretrain_res_flag: bool):
+    assert isinstance(exp_conf, dict), "Wrong data type for parameter 'exp_conf'."
+    params = ["tokenization", "permutation", "data_type", "analysis_subject", "test_types"]
+    assert all([p in exp_conf for p in params]), "Wrong value for parameter 'exp_conf'."
+    assert isinstance(use_cases, list), "Wrong data type for parameter 'use_cases'."
+    assert len(use_cases) > 0, "Empty use case list."
+    assert isinstance(tuned_res_flag, bool), "Wrong data type for parameter 'tuned_res_flag'."
+    assert isinstance(pretrain_res_flag, bool), "Wrong data type for parameter 'pretrain_res_flag'."
 
+    tokenization = exp_conf['tokenization']
     permutation = exp_conf['permutation']
     data_type = exp_conf['data_type']
     analysis_subject = exp_conf['analysis_subject']
     test_types = exp_conf['test_types']
-    tokenization = exp_conf['tokenization']
 
     testers = []
     for test_type in test_types:

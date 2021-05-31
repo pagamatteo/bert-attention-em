@@ -95,7 +95,8 @@ class AttentionMapAnalyzer(object):
         assert isinstance(results, list), "Wrong data type for parameter 'results'."
         assert len(results) == len(self.testers), "Length mismatch between 'results' and 'self.testers'."
         assert isinstance(label, int), "Wrong data type for parameter 'label'."
-        assert isinstance(pred, int), "Wrong data type for parameter 'pred'."
+        if pred is not None:
+            assert isinstance(pred, int), "Wrong data type for parameter 'pred'."
 
         for tester_idx in range(len(self.testers)):
             tester_res_history = self.res_history[tester_idx]
@@ -107,23 +108,25 @@ class AttentionMapAnalyzer(object):
 
                 self._save_result(tester_res_history, tester_res, 'true_match')
 
-                if pred == 1:   # true positive
-                    self._save_result(tester_res_history, tester_res, 'pred_match')
-                    self._save_result(tester_res_history, tester_res, 'tp')
-                else:           # false negative
-                    self._save_result(tester_res_history, tester_res, 'pred_non_match')
-                    self._save_result(tester_res_history, tester_res, 'fn')
+                if pred is not None:
+                    if pred == 1:   # true positive
+                        self._save_result(tester_res_history, tester_res, 'pred_match')
+                        self._save_result(tester_res_history, tester_res, 'tp')
+                    else:           # false negative
+                        self._save_result(tester_res_history, tester_res, 'pred_non_match')
+                        self._save_result(tester_res_history, tester_res, 'fn')
 
             else:  # non-match row
 
                 self._save_result(tester_res_history, tester_res, 'true_non_match')
 
-                if pred == 1:   # false positive
-                    self._save_result(tester_res_history, tester_res, 'pred_match')
-                    self._save_result(tester_res_history, tester_res, 'fp')
-                else:           # true negative
-                    self._save_result(tester_res_history, tester_res, 'pred_non_match')
-                    self._save_result(tester_res_history, tester_res, 'tn')
+                if pred is not None:
+                    if pred == 1:   # false positive
+                        self._save_result(tester_res_history, tester_res, 'pred_match')
+                        self._save_result(tester_res_history, tester_res, 'fp')
+                    else:           # true negative
+                        self._save_result(tester_res_history, tester_res, 'pred_non_match')
+                        self._save_result(tester_res_history, tester_res, 'tn')
 
             if category is not None:
                 if category not in tester_res_history:
@@ -143,7 +146,9 @@ class AttentionMapAnalyzer(object):
         assert 'text_units' in attn_params, "'text_units' not found."
 
         label = attn_params['labels'].item()
-        pred = attn_params['preds'].item()
+        pred = None
+        if attn_params['preds'] is not None:
+            pred = attn_params['preds'].item()
         text_units = attn_params['text_units']
         category = None
         if 'category' in attn_params:

@@ -43,10 +43,9 @@ def test_sampler(conf: dict, sampler_conf: dict):
 
     dataset = get_dataset(conf)
 
-    size = sampler_conf['size']
-    target_class = sampler_conf['target_class']
-    seeds = sampler_conf['seeds']
-    sample = get_sample(dataset, size, target_class, conf['permute'], seeds)
+    complete_sampler_conf = sampler_conf.copy()
+    complete_sampler_conf['permute'] = conf['permute']
+    sample = get_sample(dataset, complete_sampler_conf)
 
     print("Num. samples: {}".format(len(sample)))
 
@@ -90,10 +89,9 @@ def test_attn_extractor(conf: dict, sampler_conf: dict, fine_tune: str, extracto
         model_path = None
     model = get_model(model_name, fine_tune, model_path)
 
-    size = sampler_conf['size']
-    target_class = sampler_conf['target_class']
-    seeds = sampler_conf['seeds']
-    sample = get_sample(dataset, size, target_class, conf['permute'], seeds)
+    complete_sampler_conf = sampler_conf.copy()
+    complete_sampler_conf['permute'] = conf['permute']
+    sample = get_sample(dataset, complete_sampler_conf)
 
     extractor_params = {}
     for extractor_name in extractor_names:
@@ -139,10 +137,9 @@ def test_attn_tester(conf: dict, sampler_conf: dict, fine_tune: str, extractor_n
         model_path = None
     model = get_model(model_name, fine_tune, model_path)
 
-    size = sampler_conf['size']
-    target_class = sampler_conf['target_class']
-    seeds = sampler_conf['seeds']
-    sample = get_sample(dataset, size, target_class, conf['permute'], seeds)
+    complete_sampler_conf = sampler_conf.copy()
+    complete_sampler_conf['permute'] = conf['permute']
+    sample = get_sample(dataset, complete_sampler_conf)
 
     extractor_params = {}
     for extractor_name in extractor_names:
@@ -201,10 +198,9 @@ def test_attn_analyzer(conf: dict, sampler_conf: dict, fine_tune: str, extractor
         model_path = None
     model = get_model(model_name, fine_tune, model_path)
 
-    size = sampler_conf['size']
-    target_class = sampler_conf['target_class']
-    seeds = sampler_conf['seeds']
-    sample = get_sample(dataset, size, target_class, conf['permute'], seeds)
+    complete_sampler_conf = sampler_conf.copy()
+    complete_sampler_conf['permute'] = conf['permute']
+    sample = get_sample(dataset, complete_sampler_conf)
 
     extractor_params = {}
     for extractor_name in extractor_names:
@@ -230,7 +226,7 @@ def test_attn_analyzer(conf: dict, sampler_conf: dict, fine_tune: str, extractor
         else:
             raise ValueError("Wrong tester name.")
 
-    analyzers = get_analyzers(extractor_params, tester_params)
+    _, _, analyzers = get_analyzers(extractor_params, tester_params)
 
     for analyzer in analyzers:
 

@@ -11,6 +11,10 @@ from attention.testers import GenericAttributeAttentionTest
 from attention.analyzers import AttentionMapAnalyzer
 
 
+PROJECT_DIR = os.path.abspath('..')
+MODELS_DIR = os.path.join(PROJECT_DIR, 'results', 'models')
+
+
 def get_use_case(use_case: str):
 
     data_collector = DataCollector()
@@ -55,9 +59,16 @@ def get_dataset(conf: dict):
     return dataset
 
 
-def get_sample(dataset: EMDataset, size: int = None, target_class='both', permute: bool = False,
-               seeds: list = [42, 42]):
+def get_sample(dataset: EMDataset, sampler_conf: dict):
 
+    assert isinstance(sampler_conf, dict), "Wrong data type for parameter 'sampler_conf'."
+    params = ['size', 'target_class', 'permute', 'seeds']
+    assert all([p in sampler_conf for p in params]), "Wrong value for parameter 'sampler_conf'."
+
+    size = sampler_conf['size']
+    target_class = sampler_conf['target_class']
+    permute = sampler_conf['permute']
+    seeds = sampler_conf['seeds']
     assert isinstance(target_class, (str, int)), "Wrong data type for parameter 'target_class'."
     assert target_class in ['both', 0, 1], "Wrong value for parameter 'target_class'."
     assert isinstance(seeds, list), "Wrong data type for parameter 'seeds'."
@@ -69,7 +80,7 @@ def get_sample(dataset: EMDataset, size: int = None, target_class='both', permut
         sample = sampler.get_balanced_data(size=size, seeds=seeds)
     elif target_class == 0:
         sample = sampler.get_non_match_data(size=size, seed=seeds[0])
-    elif target_class == 1:
+    else:   # target_class = 1
         sample = sampler.get_match_data(size=size, seed=seeds[1])
 
     return sample
@@ -91,7 +102,7 @@ def get_model(model_name: str, fine_tune: str = None, model_path: str = None):
     else:
         if fine_tune == 'simple':
             model = AutoModelForSequenceClassification.from_pretrained(model_path)
-        elif fine_tune == 'advanced':
+        else:   # fine_tune = 'advanced':
             model = MatcherTransformer.load_from_checkpoint(checkpoint_path=model_path)
 
     return model
@@ -118,6 +129,9 @@ def get_extractors(extractor_params: dict):
             model = extractor_param['model']
 
             attn_extractor = AttributeAttentionExtractor(dataset, model)
+
+        else:
+            raise NotImplementedError()
 
         extractors.append(attn_extractor)
 
@@ -146,6 +160,9 @@ def get_testers(tester_params: dict):
 
             attn_tester = GenericAttributeAttentionTest(permute=permute, model_attention_grid=model_attention_grid)
 
+        else:
+            raise NotImplementedError()
+
         testers.append(attn_tester)
 
     return testers
@@ -158,4 +175,50 @@ def get_analyzers(extractor_params: dict, tester_params: dict):
 
     analyzers = [AttentionMapAnalyzer(extractor, testers) for extractor in extractors]
 
-    return analyzers
+    return extractors, testers, analyzers
+
+
+def get_pipeline(conf):
+    assert isinstance(conf, dict), "Wrong data type for parameter 'conf'."
+    params = ['use_case', 'data_type', 'permute', 'model_name', 'tok', 'label_col', 'left_prefix', 'right_prefix',
+              'max_len', 'verbose', 'size', 'target_class', 'seeds', 'fine_tune_method', 'extractor', 'tester']
+    assert all([p in conf for p in params]), "Wrong value for parameter 'conf'."
+
+    # get dataset
+    dataset = get_dataset(conf)
+
+    # get sample
+    sample = get_sample(dataset, conf)
+
+    # get model
+    if conf['fine_tune_method'] is not None:
+        model_path = os.path.join(MODELS_DIR, conf['fine_tune_method'], f"{conf['use_case']}_{conf['tok']}_tuned")
+    else:
+        model_path = None
+    model = get_model(conf['model_name'], conf['fine_tune_method'], model_path)
+
+    # prepare extractor params
+    extractor_params = {}
+    extractor_name = conf['extractor']
+    if extractor_name == 'attr_extractor':
+        extractor_param = {
+            'dataset': sample,
+            'model': model,
+        }
+        extractor_params[extractor_name] = extractor_param
+    else:
+        raise ValueError("Wrong value for parameter 'extractor_names'.")
+
+    # prepare testers params
+    tester_params = {}
+    tester_name = conf['tester']
+    if tester_name == 'attr_tester':
+        tester_param = {
+            'permute': conf['permute'],
+            'model_attention_grid': (12, 12),
+        }
+        tester_params[tester_name] = tester_param
+    else:
+        raise ValueError("Wrong tester name.")
+
+    return get_analyzers(extractor_params, tester_params)
