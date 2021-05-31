@@ -1,5 +1,4 @@
-from utils.general import get_dataset, get_model, get_sample
-from attention.extractors import AttributeAttentionExtractor
+from utils.general import get_dataset, get_model, get_sample, get_extractors, get_testers, get_analyzers
 import os
 
 
@@ -78,7 +77,7 @@ def test_sampler(conf: dict, sampler_conf: dict):
     print("Num. sentences: {}".format(len(last_row[2]['token_type_ids'].unique())))
 
 
-def test_extractor(conf: dict, sampler_conf: dict, fine_tune: str):
+def test_attn_extractor(conf: dict, sampler_conf: dict, fine_tune: str, extractor_names: list):
 
     dataset = get_dataset(conf)
     use_case = conf['use_case']
@@ -96,21 +95,153 @@ def test_extractor(conf: dict, sampler_conf: dict, fine_tune: str):
     seeds = sampler_conf['seeds']
     sample = get_sample(dataset, size, target_class, conf['permute'], seeds)
 
-    attr_attn_extractor = AttributeAttentionExtractor(sample, model)
-    results = attr_attn_extractor.extract_all()
+    extractor_params = {}
+    for extractor_name in extractor_names:
 
-    for res in results:
-        left = res[0]
-        right = res[1]
-        features = res[2]
-        print(left)
-        print(right)
-        print(features.keys())
-        print("-" * 10)
+        if extractor_name == 'attr_extractor':
+            extractor_param = {
+                'dataset': sample,
+                'model': model,
+            }
+            extractor_params[extractor_name] = extractor_param
+        else:
+            raise ValueError("Wrong value for parameter 'extractor_names'.")
+
+    attn_extractors = get_extractors(extractor_params)
+
+    for attn_extractor in attn_extractors:
+        print(type(attn_extractor))
+        results = attn_extractor.extract_all()
+
+        for res in results:
+            left = res[0]
+            right = res[1]
+            features = res[2]
+            print(left)
+            print(right)
+            print(features.keys())
+            print(features['tokens'])
+            print(features['text_units'])
+            print(features['attns'][0].shape[1:])
+            print("-" * 10)
+
+
+def test_attn_tester(conf: dict, sampler_conf: dict, fine_tune: str, extractor_names: list, tester_names: list):
+
+    dataset = get_dataset(conf)
+    use_case = conf['use_case']
+    tok = conf['tok']
+    model_name = conf['model_name']
+
+    if fine_tune is not None:
+        model_path = os.path.join(MODELS_DIR, fine_tune, f"{use_case}_{tok}_tuned")
+    else:
+        model_path = None
+    model = get_model(model_name, fine_tune, model_path)
+
+    size = sampler_conf['size']
+    target_class = sampler_conf['target_class']
+    seeds = sampler_conf['seeds']
+    sample = get_sample(dataset, size, target_class, conf['permute'], seeds)
+
+    extractor_params = {}
+    for extractor_name in extractor_names:
+
+        if extractor_name == 'attr_extractor':
+            extractor_param = {
+                'dataset': sample,
+                'model': model,
+            }
+            extractor_params[extractor_name] = extractor_param
+        else:
+            raise ValueError("Wrong extractor name.")
+
+    attn_extractors = get_extractors(extractor_params)
+
+    tester_params = {}
+    for tester_name in tester_names:
+
+        if tester_name == 'attr_tester':
+            tester_param = {
+                'permute': conf['permute'],
+                'model_attention_grid': (12, 12),
+            }
+            tester_params[tester_name] = tester_param
+        else:
+            raise ValueError("Wrong tester name.")
+
+    attn_testers = get_testers(tester_params)
+
+    for attn_extractor in attn_extractors:
+
+        print(type(attn_extractor))
+
+        for idx, (left_entity, right_entity, attn_params) in enumerate(attn_extractor.extract_all()):
+
+            print("\t", f"Row#{idx}")
+
+            for tester_id, tester in enumerate(attn_testers):
+
+                print("\t", "\t", type(tester))
+
+                result = tester.test(left_entity, right_entity, attn_params)
+                print(result.get_results().keys())
+                
+                
+def test_attn_analyzer(conf: dict, sampler_conf: dict, fine_tune: str, extractor_names: list, tester_names: list):
+
+    dataset = get_dataset(conf)
+    use_case = conf['use_case']
+    tok = conf['tok']
+    model_name = conf['model_name']
+
+    if fine_tune is not None:
+        model_path = os.path.join(MODELS_DIR, fine_tune, f"{use_case}_{tok}_tuned")
+    else:
+        model_path = None
+    model = get_model(model_name, fine_tune, model_path)
+
+    size = sampler_conf['size']
+    target_class = sampler_conf['target_class']
+    seeds = sampler_conf['seeds']
+    sample = get_sample(dataset, size, target_class, conf['permute'], seeds)
+
+    extractor_params = {}
+    for extractor_name in extractor_names:
+
+        if extractor_name == 'attr_extractor':
+            extractor_param = {
+                'dataset': sample,
+                'model': model,
+            }
+            extractor_params[extractor_name] = extractor_param
+        else:
+            raise ValueError("Wrong extractor name.")
+
+    tester_params = {}
+    for tester_name in tester_names:
+
+        if tester_name == 'attr_tester':
+            tester_param = {
+                'permute': conf['permute'],
+                'model_attention_grid': (12, 12),
+            }
+            tester_params[tester_name] = tester_param
+        else:
+            raise ValueError("Wrong tester name.")
+
+    analyzers = get_analyzers(extractor_params, tester_params)
+
+    for analyzer in analyzers:
+
+        results = analyzer.analyze_all()
+
+        print(results)
 
 
 if __name__ == '__main__':
 
+    # [BEGIN] INPUT PARAMS ---------------------------------------------------------------------------------------------
     conf = {
         'use_case': "Structured_Fodors-Zagats",
         'data_type': 'train',                       # 'train', 'test', 'valid'
@@ -130,9 +261,20 @@ if __name__ == '__main__':
         'seeds': [42, 42],                          # [42 -> class 0, 42 -> class 1]
     }
 
+    fine_tune = 'advanced'  # None, 'simple', 'advanced'
+    # [END] INPUT PARAMS -----------------------------------------------------------------------------------------------
+
+    # TEST 1
     # test_dataset(conf)
 
+    # TEST 2
     # test_sampler(conf, sampler_conf)
 
-    fine_tune = 'advanced'                            # None, 'simple', 'advanced'
-    test_extractor(conf, sampler_conf, fine_tune)
+    # TEST 3
+    # test_attn_extractor(conf, sampler_conf, fine_tune, ['attr_extractor'])
+
+    # TEST 4
+    # test_attn_tester(conf, sampler_conf, fine_tune, ['attr_extractor'], ['attr_tester'])
+    
+    # TEST 5
+    test_attn_analyzer(conf, sampler_conf, fine_tune, ['attr_extractor'], ['attr_tester'])
