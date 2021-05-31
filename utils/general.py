@@ -6,6 +6,9 @@ from utils.data_collector import DataCollector
 from models.em_dataset import EMDataset
 from utils.data_selection import Sampler
 from fine_tuning.advanced_fine_tuning import MatcherTransformer
+from attention.extractors import AttributeAttentionExtractor
+from attention.testers import GenericAttributeAttentionTest
+from attention.analyzers import AttentionMapAnalyzer
 
 
 def get_use_case(use_case: str):
@@ -92,3 +95,67 @@ def get_model(model_name: str, fine_tune: str = None, model_path: str = None):
             model = MatcherTransformer.load_from_checkpoint(checkpoint_path=model_path)
 
     return model
+
+
+def get_extractors(extractor_params: dict):
+
+    assert isinstance(extractor_params, dict), "Wrong data type for parameter 'extractor_params'."
+    available_extractors = ['attr_extractor']
+    for ex in extractor_params:
+        assert ex in available_extractors, f"Wrong value for parameter 'extractor_params' ({available_extractors})."
+        assert isinstance(extractor_params[ex], dict), "Wrong value for parameter 'extractor_params'."
+
+    extractors = []
+    for extractor_name in extractor_params:
+
+        if extractor_name == 'attr_extractor':
+
+            extractor_param = extractor_params[extractor_name]
+            params = ['dataset', 'model']
+            assert all([p in params for p in extractor_param]), "Wrong value for attr_extractor."
+
+            dataset = extractor_param['dataset']
+            model = extractor_param['model']
+
+            attn_extractor = AttributeAttentionExtractor(dataset, model)
+
+        extractors.append(attn_extractor)
+
+    return extractors
+
+
+def get_testers(tester_params: dict):
+
+    assert isinstance(tester_params, dict), "Wrong data type for parameter 'tester_params'."
+    available_testers = ['attr_tester']
+    for t in tester_params:
+        assert t in available_testers, f"Wrong value for parameter 'tester_params' ({available_testers})."
+        assert isinstance(tester_params[t], dict), "Wrong value for parameter 'tester_params'."
+
+    testers = []
+    for tester_name in tester_params:
+
+        if tester_name == 'attr_tester':
+
+            tester_param = tester_params[tester_name]
+            params = ['permute', 'model_attention_grid']
+            assert all([p in params for p in tester_param]), "Wrong value for attr_tester."
+
+            permute = tester_param['permute']
+            model_attention_grid = tester_param['model_attention_grid']
+
+            attn_tester = GenericAttributeAttentionTest(permute=permute, model_attention_grid=model_attention_grid)
+
+        testers.append(attn_tester)
+
+    return testers
+
+
+def get_analyzers(extractor_params: dict, tester_params: dict):
+
+    extractors = get_extractors(extractor_params)
+    testers = get_testers(tester_params)
+
+    analyzers = [AttentionMapAnalyzer(extractor, testers) for extractor in extractors]
+
+    return analyzers
