@@ -9,9 +9,10 @@ import pandas as pd
 from models.em_dataset import EMDataset
 from tqdm import tqdm
 from utils.data_collector import DataCollector
+from pathlib import Path
 
 
-PROJECT_DIR = os.path.abspath('..')
+PROJECT_DIR = Path(__file__).parent.parent
 RESULTS_DIR = os.path.join(PROJECT_DIR, 'results', 'models', 'advanced')
 
 

@@ -1,14 +1,12 @@
 import os
-import pickle
-import copy
-import itertools
 from pathlib import Path
 
 from utils.result_collector import TestResultCollector
 from utils.plot import plot_layers_heads_attention
 from utils.general import get_pipeline
 
-PROJECT_DIR = os.path.abspath('..')
+
+PROJECT_DIR = Path(__file__).parent.parent
 MODELS_DIR = os.path.join(PROJECT_DIR, 'results', 'models')
 RESULTS_DIR = os.path.join(PROJECT_DIR, 'results', 'analysis')
 
@@ -99,7 +97,7 @@ if __name__ == '__main__':
         'verbose': False,
         'size': None,
         'target_class': 1,  # 'both', 0, 1
-        'fine_tune_method': 'simple',  # None, 'simple', 'advanced'
+        'fine_tune_method': 'advanced',  # None, 'simple', 'advanced'
         'extractor': 'attr_extractor',
         'tester': 'attr_tester',
         'seeds': [42, 42]

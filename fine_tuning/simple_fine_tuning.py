@@ -8,9 +8,10 @@ from sklearn.metrics import f1_score
 
 from models.em_dataset import EMDataset
 from utils.general import get_dataset
+from pathlib import Path
 
 
-PROJECT_DIR = os.path.abspath('..')
+PROJECT_DIR = Path(__file__).parent.parent
 RESULTS_DIR = os.path.join(PROJECT_DIR, 'results', 'models', 'simple')
 
 

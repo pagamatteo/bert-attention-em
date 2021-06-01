@@ -1,8 +1,9 @@
 from utils.general import get_dataset, get_model, get_sample, get_extractors, get_testers, get_analyzers
 import os
+from pathlib import Path
 
 
-PROJECT_DIR = os.path.abspath('..')
+PROJECT_DIR = Path(__file__).parent.parent
 MODELS_DIR = os.path.join(PROJECT_DIR, 'results', 'models')
 RESULTS_DIR = os.path.join(PROJECT_DIR, 'results', 'analysis')
 

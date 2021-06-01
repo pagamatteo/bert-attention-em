@@ -7,7 +7,7 @@ from pathlib import Path
 from utils.general import get_pipeline
 
 
-PROJECT_DIR = os.path.abspath('..')
+PROJECT_DIR = Path(__file__).parent.parent
 MODELS_DIR = os.path.join(PROJECT_DIR, 'results', 'models')
 RESULTS_DIR = os.path.join(PROJECT_DIR, 'results', 'analysis')
 

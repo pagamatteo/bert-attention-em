@@ -5,9 +5,10 @@ import numpy as np
 from utils.result_collector import TestResultCollector
 from attention.testers import GenericAttributeAttentionTest
 from utils.plot import plot_results, plot_benchmark_results, plot_agg_results
+from pathlib import Path
 
 
-PROJECT_DIR = os.path.abspath('..')
+PROJECT_DIR = Path(__file__).parent.parent
 RESULTS_DIR = os.path.join(PROJECT_DIR, 'results', 'analysis')
 
 

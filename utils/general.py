@@ -1,6 +1,7 @@
 import os
 import pandas as pd
 from transformers import AutoModel, AutoModelForSequenceClassification
+from pathlib import Path
 
 from utils.data_collector import DataCollector
 from models.em_dataset import EMDataset
@@ -11,7 +12,7 @@ from attention.testers import GenericAttributeAttentionTest
 from attention.analyzers import AttentionMapAnalyzer
 
 
-PROJECT_DIR = os.path.abspath('..')
+PROJECT_DIR = Path(__file__).parent.parent
 MODELS_DIR = os.path.join(PROJECT_DIR, 'results', 'models')
 
 
