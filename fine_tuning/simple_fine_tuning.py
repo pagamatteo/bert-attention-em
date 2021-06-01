@@ -103,7 +103,7 @@ if __name__ == '__main__':
     conf = {
         'use_case': "Structured_Fodors-Zagats",
         'model_name': 'bert-base-uncased',
-        'tok': 'sent_pair',  # 'sent_pair', 'attr', 'attr_pair'
+        'tok': 'attr_pair',  # 'sent_pair', 'attr', 'attr_pair'
         'label_col': 'label',
         'left_prefix': 'left_',
         'right_prefix': 'right_',

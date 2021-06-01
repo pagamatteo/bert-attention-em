@@ -4,7 +4,7 @@ import seaborn as sns
 from utils.result_collector import TestResultCollector
 
 
-def plot_layers_heads_attention(attns, mask=None):
+def plot_layers_heads_attention(attns, mask=None, out_file_name: str = None):
     x = attns.shape[0]
     y = attns.shape[1]
 
@@ -46,6 +46,10 @@ def plot_layers_heads_attention(attns, mask=None):
                 sns.heatmap(attns[i][j], ax=ax, cbar=False)
                 count += 1
     plt.subplots_adjust(hspace=0.5)
+
+    if out_file_name:
+        plt.savefig(out_file_name, bbox_inches='tight')
+
     plt.show()
 
 

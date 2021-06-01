@@ -281,12 +281,12 @@ def evaluate(out_model_path: str, eval_loader: DataLoader):
 
 if __name__ == '__main__':
 
-    fit = False
+    fit = True
 
     conf = {
         'use_case': "Structured_Fodors-Zagats",
         'model_name': 'bert-base-uncased',
-        'tok': 'sent_pair',  # 'sent_pair', 'attr', 'attr_pair'
+        'tok': 'attr_pair',  # 'sent_pair', 'attr', 'attr_pair'
         'label_col': 'label',
         'left_prefix': 'left_',
         'right_prefix': 'right_',
@@ -313,7 +313,7 @@ if __name__ == '__main__':
 
     if fit:
 
-        num_epochs = 2
+        num_epochs = 10
         train(model_name, num_epochs, dm, out_model_path=out_model_path, gpus=0)
 
     else:
