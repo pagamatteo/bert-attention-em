@@ -17,7 +17,7 @@ def run_inspection(conf: dict, inspect_row_idx: int, save: bool):
     assert isinstance(save, bool), "Wrong data type for parameter 'save'."
 
     use_case = conf['use_case']
-    out_path = os.path.join(RESULTS_DIR, use_case, "plots")
+    out_path = os.path.join(RESULTS_DIR, use_case, "inspection")
     Path(out_path).mkdir(parents=True, exist_ok=True)
 
     template_file_name = '{}_{}_{}_{}_{}_{}_{}'.format(use_case, conf['data_type'], conf['extractor'],
