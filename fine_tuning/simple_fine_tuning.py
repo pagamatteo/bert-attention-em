@@ -17,6 +17,8 @@ RESULTS_DIR = os.path.join(PROJECT_DIR, 'results', 'models', 'simple')
 
 def train(model_name: str, num_epochs: int, train_dataset: EMDataset, val_dataset: EMDataset,
           out_model_path: str = None):
+          
+    print("Starting fine-tuning...")
 
     assert isinstance(model_name, str), "Wrong data type for parameter 'model_name'."
     assert isinstance(num_epochs, int), "Wrong data type for parameter 'num_epochs'."
