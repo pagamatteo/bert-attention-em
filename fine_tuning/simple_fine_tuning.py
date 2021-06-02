@@ -59,7 +59,7 @@ def train(model_name: str, num_epochs: int, train_dataset: EMDataset, val_datase
         train_dataset=train_dataset,  # training dataset
         eval_dataset=val_dataset,  # evaluation dataset
         model_init=model_init,
-        compute_metrics=compute_metrics,
+        # compute_metrics=compute_metrics,
     )
 
     trainer.train()
