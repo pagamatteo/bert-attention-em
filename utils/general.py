@@ -96,7 +96,13 @@ def get_model(model_name: str, fine_tune: str = None, model_path: str = None):
         assert model_path is not None, "If 'fine_tune' is not null, provide a model path."
     if model_path is not None:
         assert isinstance(model_path, str), "Wrong data type for parameter 'model_path'."
-        assert os.path.exists(model_path), "Wrong value for parameter 'model_path'."
+        found = False
+        if os.path.exists(model_path):
+            found = True
+        if os.path.exists(f"{model_path}.zip"):
+            found = True
+            model_path = f"{model_path}.zip"
+        assert found, "Wrong value for parameter 'model_path'."
 
     if not fine_tune:
         model = AutoModel.from_pretrained(model_name, output_hidden_states=True, output_attentions=True)

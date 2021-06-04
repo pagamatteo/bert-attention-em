@@ -70,7 +70,8 @@ def run(confs: list, num_attempts: int, save: bool):
                 for cat, cat_res in res.items():
                     if cat_res is not None:
                         if all_results[res_key][cat] is not None:
-                            all_results[res_key][cat].add_collector(cat_res)
+                            # all_results[res_key][cat].add_collector(cat_res)
+                            all_results[res_key][cat].transform_collector(cat_res, transform_fn=lambda x, y: x + y)
                         else:
                             all_results[res_key][cat] = copy.deepcopy(cat_res)
                         all_results_counts[res_key][cat] += 1
@@ -126,17 +127,17 @@ if __name__ == '__main__':
     }
 
     variable_params = {
-        'use_case': ["Structured_Fodors-Zagats"],
+        'use_case': ["Structured_DBLP-GoogleScholar"],
         'data_type': ['train', 'test'],
-        'permute': [False, True],
+        'permute': [False],
         'model_name': ['bert-base-uncased'],
-        'tok': ['sent_pair'],  # 'sent_pair', 'attr', 'attr_pair'
+        'tok': ['sent_pair', 'attr_pair'],  # 'sent_pair', 'attr', 'attr_pair'
         'size': [None],
         'target_class': ['both'],  # 'both', 0, 1
-        'fine_tune_method': [None],  # None, 'simple', 'advanced'
+        'fine_tune_method': [None, 'simple', 'advanced'],  # None, 'simple', 'advanced'
         'extractor': ['attr_extractor'],
         'tester': ['attr_tester'],
-        'seeds': [[42, 42], [42, 24], [42, 12]]
+        'seeds': [[42, 42]]  # , [42, 24], [42, 12]]
     }
 
     confs_vals = list(itertools.product(*variable_params.values()))

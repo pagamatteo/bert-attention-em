@@ -240,10 +240,10 @@ if __name__ == '__main__':
 
     # [BEGIN] INPUT PARAMS ---------------------------------------------------------------------------------------------
     conf = {
-        'use_case': "Structured_Fodors-Zagats",
+        'use_case': "Structured_Amazon-Google",
         'data_type': 'train',                       # 'train', 'test', 'valid'
         'model_name': 'bert-base-uncased',
-        'tok': 'sent_pair',                         # 'sent_pair', 'attr', 'attr_pair'
+        'tok': 'attr_pair',                         # 'sent_pair', 'attr', 'attr_pair'
         'label_col': 'label',
         'left_prefix': 'left_',
         'right_prefix': 'right_',
@@ -265,7 +265,7 @@ if __name__ == '__main__':
     # test_dataset(conf)
 
     # TEST 2
-    # test_sampler(conf, sampler_conf)
+    test_sampler(conf, sampler_conf)
 
     # TEST 3
     # test_attn_extractor(conf, sampler_conf, fine_tune, ['attr_extractor'])
@@ -274,4 +274,4 @@ if __name__ == '__main__':
     # test_attn_tester(conf, sampler_conf, fine_tune, ['attr_extractor'], ['attr_tester'])
     
     # TEST 5
-    test_attn_analyzer(conf, sampler_conf, fine_tune, ['attr_extractor'], ['attr_tester'])
+    # test_attn_analyzer(conf, sampler_conf, fine_tune, ['attr_extractor'], ['attr_tester'])

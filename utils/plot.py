@@ -53,7 +53,7 @@ def plot_layers_heads_attention(attns, mask=None, out_file_name: str = None):
     plt.show()
 
 
-def plot_results(results, tester, target_cats=None, plot_params=None):
+def plot_results(results, tester, target_cats=None, plot_params=None, vmin=0, vmax=1):
     assert isinstance(results, dict)
     if target_cats is not None:
         assert isinstance(target_cats, list)
@@ -73,7 +73,40 @@ def plot_results(results, tester, target_cats=None, plot_params=None):
 
         if plot_params is None:
             plot_params = ['match_attr_attn_loc', 'match_attr_attn_over_mean']
-        tester.plot(cat_res, plot_params=plot_params, labels=True)
+        tester.plot(cat_res, plot_params=plot_params, labels=True, vmin=vmin, vmax=vmax)
+
+
+def plot_comparison(res1, res2, cmp_res, tester, cmp_vals, target_cats=None, plot_params=None):
+    assert isinstance(res1, dict)
+    assert isinstance(res2, dict)
+    assert isinstance(cmp_res, dict)
+    assert isinstance(cmp_vals, list)
+    assert len(cmp_vals) == 2
+    if target_cats is not None:
+        assert isinstance(target_cats, list)
+        assert len(target_cats) > 0
+
+    for cat in set(res1).intersection(set(res2)):
+        cat_res1 = res1[cat]
+        cat_res2 = res2[cat]
+        cmp_cat_res = cmp_res[cat]
+
+        if cat_res1 is None or cat_res2 is None or cmp_cat_res is None:
+            continue
+
+        if target_cats:
+            if cat not in target_cats:
+                continue
+
+        print(cat)
+        assert isinstance(cat_res1, TestResultCollector)
+        assert isinstance(cat_res2, TestResultCollector)
+        assert isinstance(cmp_cat_res, TestResultCollector)
+
+        if plot_params is None:
+            plot_params = ['match_attr_attn_loc', 'match_attr_attn_over_mean']
+        tester.plot_comparison(cat_res1, cat_res2, cmp_cat_res, plot_params=plot_params, labels=True,
+                               title_prefix=f"{cmp_vals[0]}_vs_{cmp_vals[1]}")
 
 
 def plot_benchmark_results(results, tester, use_cases, target_cats=None, vmin=0, vmax=1):

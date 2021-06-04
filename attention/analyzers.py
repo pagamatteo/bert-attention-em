@@ -80,13 +80,15 @@ class AttentionMapAnalyzer(object):
                     assert isinstance(res_history[result_name][key], TestResultCollector)
                     assert isinstance(result[key], TestResultCollector)
 
-                    res_history[result_name][key].add_collector(result[key])
+                    # res_history[result_name][key].add_collector(result[key])
+                    res_history[result_name].transform_collector(result, transform_fn=lambda x, y: x + y)
 
             elif isinstance(result, TestResultCollector):
 
                 assert isinstance(res_history[result_name], TestResultCollector)
 
-                res_history[result_name].add_collector(result)
+                # res_history[result_name].add_collector(result)
+                res_history[result_name].transform_collector(result, transform_fn=lambda x, y: x + y)
 
         self.counts[result_name] += 1
 

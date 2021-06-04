@@ -187,7 +187,7 @@ class GenericAttributeAttentionTest(object):
         assert np.sum([param in result for param in params]) == len(params)
 
     def plot(self, res_collector: TestResultCollector, plot_params: list = None,
-             out_dir=None, out_file_name_prefix=None, ax=None, labels=None,
+             out_dir=None, out_file_name_prefix=None, title_prefix=None, ax=None, labels=None,
              vmin=0, vmax=1):
 
         assert isinstance(res_collector, TestResultCollector), "Wrong data type for parameter 'res_collector'."
@@ -207,7 +207,10 @@ class GenericAttributeAttentionTest(object):
 
             if ax is None:
                 fig, new_ax = plt.subplots(figsize=(10, 5))
-                fig.suptitle(param)
+                title = param
+                if title_prefix is not None:
+                    title = f'{title_prefix}_{title}'
+                fig.suptitle(title)
             else:
                 new_ax = ax
 
@@ -237,3 +240,69 @@ class GenericAttributeAttentionTest(object):
 
             if ax is None:
                 plt.show()
+
+    def plot_comparison(self, res_coll1: TestResultCollector, res_coll2: TestResultCollector,
+                        cmp_res_coll: TestResultCollector, plot_params: list = None, out_dir=None,
+                        out_file_name_prefix=None, title_prefix=None, labels=None):
+
+        assert isinstance(res_coll1, TestResultCollector), "Wrong data type for parameter 'res_coll1'."
+        res1 = res_coll1.get_results()
+        self._check_result_params(res1)
+        assert isinstance(res_coll2, TestResultCollector), "Wrong data type for parameter 'res_coll2'."
+        res2 = res_coll2.get_results()
+        self._check_result_params(res2)
+        assert isinstance(cmp_res_coll, TestResultCollector), "Wrong data type for parameter 'cmp_res_coll'."
+        cmp_res = cmp_res_coll.get_results()
+        self._check_result_params(cmp_res)
+
+        if plot_params is not None:
+            assert isinstance(plot_params, list)
+            assert len(plot_params) > 0
+            for plot_param in plot_params:
+                assert plot_param in res1
+                assert plot_param in res2
+                assert plot_param in cmp_res
+
+        for param in res1:
+            score1 = res1[param]
+            score2 = res2[param]
+            cmp_score = cmp_res[param]
+
+            if plot_params is not None:
+                if param not in plot_params:
+                    continue
+
+            fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+            title = param
+            if title_prefix is not None:
+                title = f'{title_prefix}_{title}'
+            fig.suptitle(title)
+
+            _ = sns.heatmap(score1, annot=True, fmt='.1f', ax=axes[0], vmin=0, vmax=1)
+            _ = sns.heatmap(score2, annot=True, fmt='.1f', ax=axes[1], vmin=0, vmax=1)
+            _ = sns.heatmap(cmp_score, annot=True, fmt='.1f', ax=axes[2], vmin=-0.5, vmax=0.5)
+
+            ylabel = 'layers'
+            xlabel = 'heads'
+            if param in self.property_mask_res:
+                xlabel, ylabel = 'attributes', 'attributes'
+
+            for ax in axes:
+                ax.set_xlabel(xlabel)
+
+            if labels:
+                for ax in axes:
+                    ax.set_ylabel(ylabel)
+            else:
+                for ax in axes:
+                    ax.set_yticks([])
+
+            if out_dir is not None:
+                if out_file_name_prefix is not None:
+                    out_plot_file_name = '{}_{}.pdf'.format(out_file_name_prefix, param)
+                else:
+                    out_plot_file_name = '{}.pdf'.format(param)
+
+                plt.savefig(os.path.join(out_dir, out_plot_file_name), bbox_inches='tight')
+
+            plt.show()

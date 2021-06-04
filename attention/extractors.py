@@ -103,7 +103,7 @@ class AttributeAttentionExtractor(AttentionExtractor):
         head_attn = head_attn.detach().numpy()
 
         # head_attn (n x n) -> softmax applied at column level
-        assert head_attn.sum(1).sum() == head_attn.shape[0]
+        # assert int(round(head_attn.sum(1).sum())) == head_attn.shape[0]
 
         # sum attention scores by attribute along the columns in order to obtain for
         # each token its attribute attentions
@@ -118,7 +118,7 @@ class AttributeAttentionExtractor(AttentionExtractor):
         attr_to_word_attn = (attr_to_word_attn - min_by_cols) / (max_by_cols - min_by_cols)
         attr_to_word_attn /= attr_to_word_attn.sum(1).reshape((-1, 1))
 
-        assert attr_to_word_attn.sum(1).sum() == attr_to_word_attn.shape[0], ""
+        # assert int(round(attr_to_word_attn.sum(1).sum())) == attr_to_word_attn.shape[0]
 
         # average the attention scores that refer to the same attribute along the
         # rows in order to obtain for each attribute its attribute attentions
@@ -133,7 +133,7 @@ class AttributeAttentionExtractor(AttentionExtractor):
         attr_to_attr_attn = (attr_to_attr_attn - min_by_cols) / (max_by_cols - min_by_cols)
         attr_to_attr_attn /= attr_to_attr_attn.sum(1).reshape((-1, 1))
 
-        assert int(round(attr_to_attr_attn.sum(1).sum())) == attr_to_attr_attn.shape[0]
+        # assert int(round(attr_to_attr_attn.sum(1).sum())) == attr_to_attr_attn.shape[0]
 
         return attr_to_attr_attn
 

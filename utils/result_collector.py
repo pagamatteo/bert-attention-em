@@ -76,7 +76,7 @@ class TestResultCollector(object):
 
         return self.__copy__()
 
-    def add_collector(self, res_collector):
+    def transform_collector(self, res_collector, transform_fn):
 
         assert isinstance(res_collector, type(self)), "Wrong data type for parameter 'res_collector'."
         assert len(self) == len(res_collector), "Result collectors not compatible: different len."
@@ -89,7 +89,7 @@ class TestResultCollector(object):
                 left_shape = self.results[result_name].shape
                 right_shape = input_results[result_name].shape
                 if left_shape == right_shape:
-                    self.results[result_name] += input_results[result_name]
+                    self.results[result_name] = transform_fn(self.results[result_name], input_results[result_name])
                 else:
                     max_row_dim = max(left_shape[0], right_shape[0])
                     max_col_dim = max(left_shape[1], right_shape[1])
@@ -100,4 +100,4 @@ class TestResultCollector(object):
                     extended_right = np.zeros((max_row_dim, max_col_dim))
                     extended_right[:right_shape[0], :right_shape[1]] = input_results[result_name][:]
 
-                    self.results[result_name] = extended_left + extended_right
+                    self.results[result_name] = transform_fn(extended_left, extended_right)
