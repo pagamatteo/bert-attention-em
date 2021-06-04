@@ -17,6 +17,8 @@ RESULTS_DIR = os.path.join(PROJECT_DIR, 'results', 'models', 'simple')
 
 def train(model_name: str, num_epochs: int, train_dataset: EMDataset, val_dataset: EMDataset,
           out_model_path: str = None):
+          
+    print("Starting fine-tuning...")
 
     assert isinstance(model_name, str), "Wrong data type for parameter 'model_name'."
     assert isinstance(num_epochs, int), "Wrong data type for parameter 'num_epochs'."
@@ -28,8 +30,8 @@ def train(model_name: str, num_epochs: int, train_dataset: EMDataset, val_datase
     training_args = TrainingArguments(
         output_dir=os.path.join(RESULTS_DIR, 'results'),  # output directory
         num_train_epochs=num_epochs,  # total number of training epochs
-        per_device_train_batch_size=16,  # batch size per device during training
-        per_device_eval_batch_size=64,  # batch size for evaluation
+        per_device_train_batch_size=8,  # batch size per device during training
+        per_device_eval_batch_size=8,  # batch size for evaluation
         warmup_steps=500,  # number of warmup steps for learning rate scheduler
         weight_decay=0.01,  # strength of weight decay
         logging_dir=os.path.join(RESULTS_DIR, 'logs'),  # directory for storing logs
@@ -57,7 +59,7 @@ def train(model_name: str, num_epochs: int, train_dataset: EMDataset, val_datase
         train_dataset=train_dataset,  # training dataset
         eval_dataset=val_dataset,  # evaluation dataset
         model_init=model_init,
-        compute_metrics=compute_metrics,
+        # compute_metrics=compute_metrics,
     )
 
     trainer.train()
