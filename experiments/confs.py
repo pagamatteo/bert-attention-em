@@ -16,11 +16,31 @@ class ConfCreator(object):
             'extractor': ['attr_extractor'],
             'tester': ['attr_tester'],
         }
+        self.use_case_map = {
+            "Structured_Fodors-Zagats": 'S-FZ',
+            "Structured_DBLP-GoogleScholar": 'S-DG',
+            "Structured_DBLP-ACM": 'S-DA',
+            "Structured_Amazon-Google": 'S-AG',
+            "Structured_Walmart-Amazon": 'S-WA',
+            "Structured_Beer": 'S-BR',
+            "Structured_iTunes-Amazon": 'S-IA',
+            "Textual_Abt-Buy": 'T-AB',
+            "Dirty_iTunes-Amazon": 'D-IA',
+            "Dirty_DBLP-ACM": 'D-DA',
+            "Dirty_DBLP-GoogleScholar": 'D-DG',
+            "Dirty_Walmart-Amazon": 'D-WA'
+        }
 
     def validate_conf(self, conf: dict):
         assert isinstance(conf, dict), "Wrong data type for parameter 'conf'."
         assert all([p in self.conf_template for p in conf]), "Wrong data format for parameter 'conf'."
-        assert all([v in self.conf_template[k] for (k, v) in conf.items()]), "Wrong data format for parameter 'conf'."
+        wrong_format = False
+        for (k, v) in conf.items():
+            if v not in self.conf_template[k] and v != self.conf_template[k]:
+                wrong_format = True
+                break
+        if wrong_format:
+            raise ValueError("Wrong data format for parameter 'conf'.")
 
         return conf
 

@@ -101,12 +101,12 @@ def evaluate(model_path: str, eval_dataset: EMDataset):
 
 if __name__ == '__main__':
 
-    fit = True
+    fit = False
 
     conf = {
         'use_case': "Structured_Fodors-Zagats",
         'model_name': 'bert-base-uncased',
-        'tok': 'attr_pair',  # 'sent_pair', 'attr', 'attr_pair'
+        'tok': 'sent_pair',  # 'sent_pair', 'attr', 'attr_pair'
         'label_col': 'label',
         'left_prefix': 'left_',
         'right_prefix': 'right_',

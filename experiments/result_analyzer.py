@@ -50,9 +50,9 @@ def get_results(conf: dict, use_cases: list):
             res = pickle.load(f)
         results[use_case] = res
 
-    if len(results) > 0:
-        if len(results) == 1:
-            results = list(results.values())[0]
+    # if len(results) > 0:
+    #     if len(results) == 1:
+    #         results = list(results.values())[0]
 
     return results, tester
 
@@ -135,9 +135,11 @@ def aggregate_results(results: dict, agg_fns: list, result_ids: list):
                 cat_res = copy.deepcopy(use_case_res[cat])
                 assert isinstance(cat_res, TestResultCollector)
 
+                agg_target_res = {}
                 for result_id in result_ids:  # aggregate the result ids
                     res = cat_res.get_result(result_id)
-                    target_res[agg_fns[idx]] = agg_fn(res).reshape((-1, 1))
+                    agg_target_res[result_id] = agg_fn(res).reshape((-1, 1))
+                target_res[agg_fns[idx]] = agg_target_res
 
             if cat not in agg_cat_results:
                 agg_cat_results[cat] = [target_res]
@@ -155,18 +157,25 @@ def aggregate_results(results: dict, agg_fns: list, result_ids: list):
             if len(current_cat_res) == 0:
                 current_cat_res = copy.deepcopy(use_case_res)
             else:
-                for result_id in current_cat_res:
-                    current_cat_res[result_id] = np.concatenate([current_cat_res[result_id],
-                                                                 use_case_res[result_id]], axis=1)
+                for agg_metric in current_cat_res:
+
+                    for result_id in current_cat_res[agg_metric]:
+                        current_cat_res[agg_metric][result_id] = np.concatenate([current_cat_res[agg_metric][result_id],
+                                                                                 use_case_res[agg_metric][result_id]],
+                                                                                axis=1)
 
         agg_results[cat] = current_cat_res
 
     return agg_results
 
 
-def cmp_agg_results(res1, res2):
+def cmp_agg_results(res1, res2, target_cats):
     cmp_res = {}
     for cat in res1:
+
+        if cat not in target_cats:
+            continue
+
         cat_res1 = None
         if cat in res1:
             cat_res1 = res1[cat]
@@ -181,23 +190,37 @@ def cmp_agg_results(res1, res2):
 
         out_cat_res = copy.deepcopy(cat_res1)
         for metric in cat_res2:
-            out_cat_res[metric] -= cat_res2[metric]
+            for res_id in cat_res2[metric]:
+                out_cat_res[metric][res_id] -= cat_res2[metric][res_id]
         cmp_res[cat] = out_cat_res
 
     return cmp_res
 
 
-def use_case_analysis(conf: dict, plot_params: list, categories: list):
+def use_case_analysis(conf: dict, plot_params: list, categories: list, agg_fns: list = None,
+                                  target_agg_result_ids: list = None):
 
     assert isinstance(conf, dict), "Wrong data type for parameter 'conf'."
     assert isinstance(plot_params, list), "Wrong data type for parameter 'plot_params'."
     assert len(plot_params) > 0, "Wrong value for parameter 'plot_params'."
     assert isinstance(categories, list), "Wrong data type for parameter 'categories'."
     assert len(categories) > 0, "Wrong value for parameter 'categories'."
+    if agg_fns is not None:
+        assert isinstance(agg_fns, list), "Wrong data type for parameter 'agg_fns'."
+        assert len(agg_fns) > 0, "Empty aggregation functions."
+    if target_agg_result_ids is not None:
+        assert isinstance(target_agg_result_ids, list), "Wrong data type for parameter 'target_agg_result_ids'."
+        assert len(target_agg_result_ids) > 0, "Empty target aggregated results."
 
     res, tester = get_results(conf, [conf['use_case']])
 
-    plot_results(res, tester, target_cats=categories, plot_params=plot_params)
+    if agg_fns is not None:
+        res = aggregate_results(res, agg_fns, target_agg_result_ids)
+        display_uc = [conf_creator.use_case_map[conf['use_case']]]
+        plot_agg_results(res, target_cats=categories, xticks=display_uc, vmin=-0.5, vmax=0.5, agg=False)
+    else:
+
+        plot_results(res, tester, target_cats=categories, plot_params=plot_params)
 
 
 def use_case_comparison_analysis(confs: list, plot_params: list, categories: list):
@@ -219,82 +242,99 @@ def use_case_comparison_analysis(confs: list, plot_params: list, categories: lis
                     cmp_vals.append(conf2[param])
                     break
 
-            cmp_res = cmp_results(res1, res2)
-            plot_comparison(res1, res2, cmp_res, tester, cmp_vals, target_cats=categories, plot_params=plot_params)
+            assert list(res1.keys()) == list(res2.keys())
+            assert len(res1) == 1
+
+            if agg_fns is not None:
+                res1 = aggregate_results(res1, agg_fns, target_agg_result_ids)
+                res2 = aggregate_results(res2, agg_fns, target_agg_result_ids)
+
+                cmp_res = cmp_agg_results(res1, res2, target_cats=categories)
+                display_uc = [conf_creator.use_case_map[conf2['use_case']]]
+                plot_agg_results(cmp_res, target_cats=categories, title_prefix=f'{cmp_vals[0]} vs {cmp_vals[1]}',
+                                 xticks=display_uc, vmin=-0.5, vmax=0.5)
+
+            else:
+                res1 = list(res1.values())[0]
+                res2 = list(res2.values())[0]
+                cmp_res = cmp_results(res1, res2)
+                plot_comparison(res1, res2, cmp_res, tester, cmp_vals, target_cats=categories, plot_params=plot_params)
 
 
-def benchmark_analysis(tuned_res_flag: bool, pretrain_res_flag: bool, exp_confs: list, categories: list,
-                       agg_fns: list = None, target_agg_result_ids: list = None):
-    assert isinstance(tuned_res_flag, bool)
-    assert isinstance(pretrain_res_flag, bool)
-    assert isinstance(exp_confs, list)
-    assert len(exp_confs) > 0
-    for conf in exp_confs:
-        assert isinstance(conf, dict)
-    assert isinstance(categories, list)
-    assert len(categories) > 0
-    for c in categories:
-        assert isinstance(c, str)
+def benchmark_analysis(conf: dict, plot_params: list, categories: list, agg_fns: list = None,
+                       target_agg_result_ids: list = None):
+    assert isinstance(conf, dict), "Wrong data type for parameter 'conf'."
+    assert isinstance(plot_params, list), "Wrong data type for parameter 'plot_params'."
+    assert len(plot_params) > 0, "Empty plot params."
+    assert isinstance(categories, list), "Wrong data type for parameter 'categories'."
+    assert len(categories) > 0, "Empty categories."
     if agg_fns is not None:
-        assert isinstance(agg_fns, list)
-        assert len(agg_fns) > 0
-        for f in agg_fns:
-            assert isinstance(f, str)
+        assert isinstance(agg_fns, list), "Wrong data type for parameter 'agg_fns'."
+        assert len(agg_fns) > 0, "Empty aggregation functions."
     if target_agg_result_ids is not None:
-        assert isinstance(target_agg_result_ids, list)
-        assert len(target_agg_result_ids) > 0
-        for r in target_agg_result_ids:
-            assert isinstance(r, str)
+        assert isinstance(target_agg_result_ids, list), "Wrong data type for parameter 'target_agg_result_ids'."
+        assert len(target_agg_result_ids) > 0, "Empty target aggregated results."
 
-    for exp_conf in exp_confs:
+    use_cases = conf['use_case']
+    assert isinstance(use_cases, list), "Wrong type for configuration use_case param."
+    assert len(use_cases) > 0, "Empty use case list."
+    res, tester = get_results(conf, use_cases)
 
-        print(exp_conf)
-        results, pre_results, tester = get_benchmark_results(exp_conf, USE_CASES,
-                                                             tuned_res_flag,
-                                                             pretrain_res_flag)
+    if agg_fns is not None:
+        res = aggregate_results(res, agg_fns, target_agg_result_ids)
+        display_uc = [conf_creator.use_case_map[uc] for uc in conf_creator.conf_template['use_case']]
+        plot_agg_results(res, target_cats=categories, xticks=display_uc, vmin=-0.5, vmax=0.5, agg=True)
+    else:
+        plot_benchmark_results(res, tester, use_cases, target_cats=categories, plot_params=plot_params)
 
-        if agg_fns is not None:
-            results = aggregate_results(results, agg_fns, target_agg_result_ids)
-            pre_results = aggregate_results(pre_results, agg_fns, target_agg_result_ids)
 
-            if tuned_res_flag:
-                print()
-                print("TUNED")
-                plot_agg_results(results, target_cats=categories, xticks=USE_CASES, agg=True)
+def benchmark_comparison_analysis(confs: list, plot_params: list, categories: list, agg_fns: list = None,
+                                  target_agg_result_ids: list = None):
+    assert isinstance(confs, list), "Wrong data type for parameter 'confs'."
+    assert len(confs) > 1, "Wrong value for parameter 'confs'."
 
-            if pretrain_res_flag:
-                print()
-                print("PRETRAIN")
-                plot_agg_results(pre_results, target_cats=categories, xticks=USE_CASES,
-                                 agg=True)
+    for conf in confs:
+        assert isinstance(conf['use_case'], list), "Wrong type for configuration use_case param."
+        assert len(conf['use_case']) > 0, "Empty use case list."
+    for idx in range(len(confs) - 1):
+        assert confs[idx]['use_case'] == confs[idx + 1]['use_case'], "Use cases not equal."
+    use_cases = confs[0]['use_case']
 
-            if tuned_res_flag and pretrain_res_flag:
-                cmp_res = cmp_agg_results(results, pre_results)
-                plot_agg_results(cmp_res, target_cats=categories, xticks=USE_CASES,
-                                 vmin=-0.5, vmax=0.5)
+    for conf_idx1 in range(len(confs) - 1):
+        conf1 = confs[conf_idx1]
+        res1, tester = get_results(conf1, use_cases)
 
-        else:
+        for conf_idx2 in range(conf_idx1 + 1, len(confs)):
+            conf2 = confs[conf_idx2]
+            res2, tester = get_results(conf2, use_cases)
 
-            if tuned_res_flag:
-                print()
-                print("TUNED")
-                plot_benchmark_results(results, tester, USE_CASES, categories)
+            cmp_vals = []
+            for param in conf1:
+                if conf1[param] != conf2[param]:
+                    cmp_vals.append(conf1[param])
+                    cmp_vals.append(conf2[param])
+                    break
 
-            if pretrain_res_flag:
-                print()
-                print("PRETRAIN")
-                plot_benchmark_results(pre_results, tester, USE_CASES, categories)
+            if agg_fns is not None:
+                res1 = aggregate_results(res1, agg_fns, target_agg_result_ids)
+                res2 = aggregate_results(res2, agg_fns, target_agg_result_ids)
 
-            if tuned_res_flag and pretrain_res_flag:
-                cmp_res = cmp_benchmark_results(results, pre_results)
-                plot_benchmark_results(cmp_res, tester, USE_CASES, categories, vmin=-0.5,
+                cmp_res = cmp_agg_results(res1, res2, target_cats=categories)
+                display_uc = [conf_creator.use_case_map[uc] for uc in conf_creator.conf_template['use_case']]
+                plot_agg_results(cmp_res, target_cats=categories, title_prefix=f'{cmp_vals[0]} vs {cmp_vals[1]}',
+                                 xticks=display_uc, vmin=-0.5, vmax=0.5)
+
+            else:
+                cmp_res = cmp_benchmark_results(res1, res2)
+                plot_benchmark_results(cmp_res, tester, use_cases, target_cats=categories,
+                                       title_prefix=f'{cmp_vals[0]} {cmp_vals[1]}', plot_params=plot_params, vmin=-0.5,
                                        vmax=0.5)
 
 
 if __name__ == '__main__':
 
-    analysis_target = 'use_case'
-    # analysis_target = 'benchmark'
+    # analysis_target = 'use_case'
+    analysis_target = 'benchmark'
 
     # analysis_type = 'simple'
     analysis_type = 'comparison'
@@ -320,6 +360,12 @@ if __name__ == '__main__':
                    'avg_attr_attn', 'attr_attn_last_1',
                    'attr_attn_last_2', 'attr_attn_last_3']
 
+    # aggregation
+    # agg_fns = None
+    # target_agg_result_ids = None
+    agg_fns = ['row_mean', 'row_std']
+    target_agg_result_ids = ['match_attr_attn_loc']
+
     categories = ['all']
 
     conf_creator = ConfCreator()
@@ -328,7 +374,7 @@ if __name__ == '__main__':
     if analysis_target == 'use_case':
 
         if analysis_type == 'simple':
-            use_case_analysis(conf, plot_params, categories)
+            use_case_analysis(conf, plot_params, categories, agg_fns, target_agg_result_ids)
 
         elif analysis_type == 'comparison':
             comparison_params = ['tok']
@@ -341,65 +387,22 @@ if __name__ == '__main__':
 
     elif analysis_target == 'benchmark':
 
+        bench_conf = conf.copy()
+        bench_conf['use_case'] = conf_creator.conf_template['use_case']
+
         if analysis_type == 'simple':
-            pass
+
+            benchmark_analysis(bench_conf, plot_params, categories, agg_fns, target_agg_result_ids)
+
         elif analysis_type == 'comparison':
-            pass
+            comparison_params = ['tok']
+            # comparison_params = ['fine_tune_method']
+            bench_confs = conf_creator.get_confs(bench_conf, comparison_params)
+
+            benchmark_comparison_analysis(bench_confs, plot_params, categories, agg_fns, target_agg_result_ids)
+
         else:
             raise NotImplementedError()
 
     else:
         raise NotImplementedError()
-
-
-
-
-    # if analysis == 'use_case':
-    #
-    #     use_case = "Structured_Fodors-Zagats"
-    #     tuned_res_flag = True
-    #     pretrain_res_flag = False
-    #     plot_params = ['match_attr_attn_loc', 'match_attr_attn_over_mean',
-    #                    'avg_attr_attn', 'attr_attn_3_last', 'attr_attn_last_1',
-    #                    'attr_attn_last_2', 'attr_attn_last_3',
-    #                    'avg_attr_attn_3_last', 'avg_attr_attn_last_1',
-    #                    'avg_attr_attn_last_2', 'avg_attr_attn_last_3']
-    #     tok = 'sent_pair'
-    #     exp_confs = [
-    #         {'tokenization': tok, 'permutation': False, 'data_type': 'train', 'analysis_subject': 'attr',
-    #          'test_types': ['attr_attn']},
-    #         # {'tokenization': tok, 'permutation': False, 'data_type': 'test', 'analysis_subject': 'attr',
-    #         #  'test_types': ['attr_attn']},
-    #         # {'tokenization': tok, 'permutation': True, 'data_type': 'train', 'analysis_subject': 'attr',
-    #         #  'test_types': ['attr_attn']},
-    #         # {'tokenization': tok, 'permutation': True, 'data_type': 'test', 'analysis_subject': 'attr',
-    #         #  'test_types': ['attr_attn']}
-    #     ]
-    #     categories = ['all']
-    #
-    #     use_case_analysis(use_case, tuned_res_flag, pretrain_res_flag, plot_params, exp_confs, categories)
-    #
-    # elif analysis == 'benchmark':
-    #
-    #     tuned_res_flag = True
-    #     pretrain_res_flag = False
-    #     agg_fns = None
-    #     target_agg_result_ids = None
-    #     # aggregation
-    #     # agg_fns = ['row_mean', 'row_std']
-    #     # target_agg_result_ids = ['match_attr_attn_loc']
-    #     tok = 'sent_pair'
-    #     exp_confs = [
-    #         {'tokenization': tok, 'permutation': False, 'data_type': 'train', 'analysis_subject': 'attr',
-    #          'test_types': ['attr_attn']},
-    #         # {'tokenization': tok, 'permutation': False, 'data_type': 'test', 'analysis_subject': 'attr',
-    #         #  'test_types': ['attr_attn']},
-    #         # {'tokenization': tok, 'permutation': True, 'data_type': 'train', 'analysis_subject': 'attr',
-    #         #  'test_types': ['attr_attn']},
-    #         # {'tokenization': tok, 'permutation': True, 'data_type': 'test', 'analysis_subject': 'attr',
-    #         #  'test_types': ['attr_attn']}
-    #     ]
-    #
-    #     categories = ['all']
-    #
-    #     benchmark_analysis(tuned_res_flag, pretrain_res_flag, exp_confs, categories, agg_fns, target_agg_result_ids)

@@ -127,9 +127,9 @@ if __name__ == '__main__':
     }
 
     variable_params = {
-        'use_case': ["Structured_DBLP-GoogleScholar"],
+        'use_case': ["Dirty_DBLP-GoogleScholar"],
         'data_type': ['train', 'test'],
-        'permute': [False],
+        'permute': [True],
         'model_name': ['bert-base-uncased'],
         'tok': ['sent_pair', 'attr_pair'],  # 'sent_pair', 'attr', 'attr_pair'
         'size': [None],

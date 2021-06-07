@@ -59,21 +59,30 @@ def plot_results(results, tester, target_cats=None, plot_params=None, vmin=0, vm
         assert isinstance(target_cats, list)
         assert len(target_cats) > 0
 
-    for cat, cat_res in results.items():
+    if plot_params is None:
+        plot_params = ['match_attr_attn_loc', 'match_attr_attn_over_mean',
+                       'avg_attr_attn', 'attr_attn_3_last', 'attr_attn_last_1',
+                       'attr_attn_last_2', 'attr_attn_last_3',
+                       'avg_attr_attn_3_last', 'avg_attr_attn_last_1',
+                       'avg_attr_attn_last_2', 'avg_attr_attn_last_3']
 
-        if cat_res is None:
-            continue
+    for use_case in results:
+        print(use_case)
+        uc_res = results[use_case]
 
-        if target_cats:
-            if cat not in target_cats:
+        for cat, cat_res in uc_res.items():
+
+            if cat_res is None:
                 continue
 
-        print(cat)
-        assert isinstance(cat_res, TestResultCollector)
+            if target_cats:
+                if cat not in target_cats:
+                    continue
 
-        if plot_params is None:
-            plot_params = ['match_attr_attn_loc', 'match_attr_attn_over_mean']
-        tester.plot(cat_res, plot_params=plot_params, labels=True, vmin=vmin, vmax=vmax)
+            print(cat)
+            assert isinstance(cat_res, TestResultCollector)
+
+            tester.plot(cat_res, plot_params=plot_params, labels=True, vmin=vmin, vmax=vmax, title_prefix=use_case)
 
 
 def plot_comparison(res1, res2, cmp_res, tester, cmp_vals, target_cats=None, plot_params=None):
@@ -85,6 +94,13 @@ def plot_comparison(res1, res2, cmp_res, tester, cmp_vals, target_cats=None, plo
     if target_cats is not None:
         assert isinstance(target_cats, list)
         assert len(target_cats) > 0
+
+    if plot_params is None:
+        plot_params = ['match_attr_attn_loc', 'match_attr_attn_over_mean',
+                       'avg_attr_attn', 'attr_attn_3_last', 'attr_attn_last_1',
+                       'attr_attn_last_2', 'attr_attn_last_3',
+                       'avg_attr_attn_3_last', 'avg_attr_attn_last_1',
+                       'avg_attr_attn_last_2', 'avg_attr_attn_last_3']
 
     for cat in set(res1).intersection(set(res2)):
         cat_res1 = res1[cat]
@@ -103,13 +119,12 @@ def plot_comparison(res1, res2, cmp_res, tester, cmp_vals, target_cats=None, plo
         assert isinstance(cat_res2, TestResultCollector)
         assert isinstance(cmp_cat_res, TestResultCollector)
 
-        if plot_params is None:
-            plot_params = ['match_attr_attn_loc', 'match_attr_attn_over_mean']
         tester.plot_comparison(cat_res1, cat_res2, cmp_cat_res, plot_params=plot_params, labels=True,
                                title_prefix=f"{cmp_vals[0]}_vs_{cmp_vals[1]}")
 
 
-def plot_benchmark_results(results, tester, use_cases, target_cats=None, vmin=0, vmax=1):
+def plot_benchmark_results(results, tester, use_cases, target_cats=None, plot_params=None, title_prefix=None, vmin=0,
+                           vmax=1):
     assert isinstance(results, dict)
     assert isinstance(use_cases, list)
     assert len(use_cases) > 0
@@ -118,10 +133,19 @@ def plot_benchmark_results(results, tester, use_cases, target_cats=None, vmin=0,
     if target_cats is not None:
         assert isinstance(target_cats, list)
         assert len(target_cats) > 0
+    if title_prefix is not None:
+        assert isinstance(title_prefix, str)
 
     first_use_case = use_cases[0]
     first_results = results[first_use_case]
     cats = list(first_results)
+
+    if plot_params is None:
+        plot_params = ['match_attr_attn_loc', 'match_attr_attn_over_mean',
+                       'avg_attr_attn', 'attr_attn_3_last', 'attr_attn_last_1',
+                       'attr_attn_last_2', 'attr_attn_last_3',
+                       'avg_attr_attn_3_last', 'avg_attr_attn_last_1',
+                       'avg_attr_attn_last_2', 'avg_attr_attn_last_3']
 
     for cat in cats:
 
@@ -131,16 +155,15 @@ def plot_benchmark_results(results, tester, use_cases, target_cats=None, vmin=0,
 
         print(cat)
 
-        plot_params = ['match_attr_attn_loc', 'match_attr_attn_over_mean',
-                       'avg_attr_attn', 'attr_attn_3_last', 'attr_attn_last_1',
-                       'attr_attn_last_2', 'attr_attn_last_3',
-                       'avg_attr_attn_3_last', 'avg_attr_attn_last_1',
-                       'avg_attr_attn_last_2', 'avg_attr_attn_last_3']
         for plot_param in plot_params:
             nrows = 3
             ncols = 4
             fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(20, 15))
-            fig.suptitle(plot_param)
+
+            title = f'{plot_param}'
+            if title_prefix is not None:
+                title = f'{title_prefix} {title}'
+            fig.suptitle(title)
 
             for idx, use_case in enumerate(use_cases):
                 ax = axes[idx // ncols][idx % ncols]
@@ -162,12 +185,14 @@ def plot_benchmark_results(results, tester, use_cases, target_cats=None, vmin=0,
             plt.show()
 
 
-def plot_agg_results(results, target_cats=None, xlabel=None, ylabel=None,
+def plot_agg_results(results, target_cats=None, title_prefix=None, xlabel=None, ylabel=None,
                      xticks=None, yticks=None, agg=False, vmin=0, vmax=0.5):
     assert isinstance(results, dict)
     if target_cats is not None:
         assert isinstance(target_cats, list)
         assert len(target_cats) > 0
+    if title_prefix is not None:
+        assert isinstance(title_prefix, str)
 
     for cat in results:
 
@@ -182,13 +207,27 @@ def plot_agg_results(results, target_cats=None, xlabel=None, ylabel=None,
 
             print(metric)
 
-            fig, ax = plt.subplots(figsize=(20, 10))
-            sns.heatmap(cat_res[metric], annot=True, fmt='.2f', vmin=vmin, vmax=vmax,
+            assert isinstance(cat_res[metric], dict)
+            assert len(cat_res[metric]) == 1
+            res_id = list(cat_res[metric].keys())[0]
+
+            figsize = (20, 10)
+            if cat_res[metric][res_id].shape[1] < 3:
+                figsize = (6, 10)
+            fig, ax = plt.subplots(figsize=figsize)
+
+            title = f'{res_id} {metric}'
+            if title_prefix is not None:
+                title = f'{title_prefix} {title}'
+            fig.suptitle(title)
+
+            sns.heatmap(cat_res[metric][res_id], annot=True, fmt='.2f', vmin=vmin, vmax=vmax,
                         xticklabels=xticks, ax=ax)
             plt.show()
 
             if agg:
                 fig, ax = plt.subplots(figsize=(5, 4))
-                sns.heatmap(cat_res[metric].mean(1).reshape((-1, 1)), annot=True,
+                fig.suptitle(f'{res_id} {metric} agg')
+                sns.heatmap(cat_res[metric][res_id].mean(1).reshape((-1, 1)), annot=True,
                             fmt='.2f', vmin=vmin, vmax=vmax, ax=ax)
                 plt.show()
