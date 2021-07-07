@@ -7,7 +7,7 @@ import torch
 from sklearn.metrics import f1_score
 
 from models.em_dataset import EMDataset
-from utils.general import get_dataset
+from utils.general import get_dataset, get_sample
 from pathlib import Path
 
 
@@ -104,7 +104,7 @@ if __name__ == '__main__':
     fit = False
 
     conf = {
-        'use_case': "Structured_Fodors-Zagats",
+        'use_case': "Dirty_iTunes-Amazon",
         'model_name': 'bert-base-uncased',
         'tok': 'sent_pair',  # 'sent_pair', 'attr', 'attr_pair'
         'label_col': 'label',
@@ -132,8 +132,18 @@ if __name__ == '__main__':
     model_name = conf['model_name']
     out_model_path = os.path.join(RESULTS_DIR, f"{uc}_{tok}_tuned")
 
+    # sampler_conf = {
+    #     'size': 2,
+    #     'target_class': 'both',  # 'both', 0, 1
+    #     'seeds': [42, 42],  # [42 -> class 0, 42 -> class 1]
+    # }
+    # complete_sampler_conf = sampler_conf.copy()
+    # complete_sampler_conf['permute'] = conf['permute']
+    # sample = get_sample(train_dataset, complete_sampler_conf)
+
     if fit:
         num_epochs = 10
         train(model_name, num_epochs, train_dataset, val_dataset, out_model_path=out_model_path)
     else:
         evaluate(out_model_path, test_dataset)
+        # evaluate(out_model_path, sample)

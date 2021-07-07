@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 
 from utils.result_collector import TestResultCollector
-from utils.plot import plot_layers_heads_attention
+from utils.plot import plot_layers_heads_attention, plot_left_to_right_heatmap
 from utils.general import get_pipeline
 
 
@@ -68,7 +68,9 @@ def run_inspection(conf: dict, inspect_row_idx: int, save: bool):
                         out_file_name = os.path.join(out_path, '{}_{}'.format(template_file_name, "lxh_attns.pdf"))
                     else:
                         out_file_name = None
-                    plot_layers_heads_attention(inspect_row_attns, mask=mask, out_file_name=out_file_name)
+                    # plot_layers_heads_attention(inspect_row_attns, mask=mask, out_file_name=out_file_name)
+                    plot_left_to_right_heatmap(inspect_row_attns[3][0], vmin=0, vmax=1, is_annot=True,
+                                               out_file_name=f'{use_case}_matching_pattern.pdf')
 
         elif isinstance(inspect_row_test_results, TestResultCollector):
             res = inspect_row_test_results.get_results()
@@ -80,7 +82,9 @@ def run_inspection(conf: dict, inspect_row_idx: int, save: bool):
                     out_file_name = os.path.join(out_path, '{}_{}'.format(template_file_name, "lxh_attns.pdf"))
                 else:
                     out_file_name = None
-                plot_layers_heads_attention(inspect_row_attns, mask=mask, out_file_name=out_file_name)
+                # plot_layers_heads_attention(inspect_row_attns, mask=mask, out_file_name=out_file_name)
+                plot_left_to_right_heatmap(inspect_row_attns[3][0], vmin=0, vmax=1, is_annot=True,
+                                           out_file_name=f'{use_case}_matching_pattern.pdf')
 
 
 if __name__ == '__main__':
@@ -89,21 +93,21 @@ if __name__ == '__main__':
         'data_type': 'train',  # 'train', 'test', 'valid'
         'permute': False,
         'model_name': 'bert-base-uncased',
-        'tok': 'attr_pair',  # 'sent_pair', 'attr', 'attr_pair'
+        'tok': 'sent_pair',  # 'sent_pair', 'attr', 'attr_pair'
         'label_col': 'label',
         'left_prefix': 'left_',
         'right_prefix': 'right_',
         'max_len': 128,
         'verbose': False,
         'size': None,
-        'target_class': 1,  # 'both', 0, 1
-        'fine_tune_method': 'advanced',  # None, 'simple', 'advanced'
+        'target_class': 'both',  # 'both', 0, 1
+        'fine_tune_method': None,  # None, 'simple', 'advanced'
         'extractor': 'attr_extractor',
         'tester': 'attr_tester',
         'seeds': [42, 42]
     }
 
-    save = True
+    save = False
     inspect_row_idx = 0
 
     run_inspection(conf, inspect_row_idx, save)

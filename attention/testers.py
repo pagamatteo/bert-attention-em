@@ -4,6 +4,8 @@ import os
 import matplotlib.pyplot as plt
 import seaborn as sns
 from utils.result_collector import TestResultCollector
+from utils.plot import plot_left_to_right_heatmap
+from experiments.confs import ConfCreator
 
 
 class GenericAttributeAttentionTest(object):
@@ -211,6 +213,10 @@ class GenericAttributeAttentionTest(object):
                 if title_prefix is not None:
                     title = f'{title_prefix}_{title}'
                 fig.suptitle(title)
+
+                # map = ConfCreator().use_case_map
+                # plot_left_to_right_heatmap(score, vmin=vmin, vmax=vmax, title=map[title_prefix], is_annot=True,
+                #                            out_file_name=f'{title_prefix}.png')
             else:
                 new_ax = ax
 
@@ -281,6 +287,12 @@ class GenericAttributeAttentionTest(object):
             _ = sns.heatmap(score1, annot=True, fmt='.1f', ax=axes[0], vmin=0, vmax=1)
             _ = sns.heatmap(score2, annot=True, fmt='.1f', ax=axes[1], vmin=0, vmax=1)
             _ = sns.heatmap(cmp_score, annot=True, fmt='.1f', ax=axes[2], vmin=-0.5, vmax=0.5)
+
+            # fig1, ax1 = plt.subplots(1, 1, figsize=(5, 4))
+            # sns.heatmap(cmp_score, annot=True, fmt='.1f', ax=ax1, vmin=-0.5, vmax=0.5)
+            # ax1.set_xlabel('heads')
+            # ax1.set_ylabel('layers')
+            # plt.savefig(f'{title}.pdf', bbox_inches='tight')
 
             ylabel = 'layers'
             xlabel = 'heads'

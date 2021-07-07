@@ -1,3 +1,4 @@
+import numpy as np
 from matplotlib import pyplot as plt
 import math
 import seaborn as sns
@@ -158,7 +159,7 @@ def plot_benchmark_results(results, tester, use_cases, target_cats=None, plot_pa
         for plot_param in plot_params:
             nrows = 3
             ncols = 4
-            fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(20, 15))
+            fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(24, 18))
 
             title = f'{plot_param}'
             if title_prefix is not None:
@@ -181,8 +182,9 @@ def plot_benchmark_results(results, tester, use_cases, target_cats=None, plot_pa
 
                 tester.plot(cat_res, plot_params=[plot_param], ax=ax, labels=labels,
                             vmin=vmin, vmax=vmax)
-            plt.subplots_adjust(wspace=0.01, hspace=0.3)
+            plt.subplots_adjust(wspace=0.005, hspace=0.2)
             plt.show()
+            # plt.savefig("avg_attn.pdf", bbox_inches='tight')
 
 
 def plot_agg_results(results, target_cats=None, title_prefix=None, xlabel=None, ylabel=None,
@@ -231,3 +233,50 @@ def plot_agg_results(results, target_cats=None, title_prefix=None, xlabel=None, 
                 sns.heatmap(cat_res[metric][res_id].mean(1).reshape((-1, 1)), annot=True,
                             fmt='.2f', vmin=vmin, vmax=vmax, ax=ax)
                 plt.show()
+
+
+def plot_left_to_right_heatmap(data: np.ndarray, vmin: (int, float), vmax: (int, float), title: str = None,
+                               is_annot: bool = True, out_file_name: str = None):
+    fig, new_ax = plt.subplots(2, 2)
+    cbar_ax = fig.add_axes([.89, .11, .03, .81])
+    # fontsize = 14
+    fontsize = 13
+    cbar_ax.tick_params(labelsize=fontsize)
+    n = len(data)
+    h = n // 2
+    score1 = data[:h, :h]
+    score2 = data[:h, h:]
+    score3 = data[h:, :h]
+    score4 = data[h:, h:]
+    attr_labels = [f'{i}' for i in range(1, h + 1)]
+
+    annot = True
+    if not is_annot:
+        annot = False
+
+    h1 = sns.heatmap(score1, annot=annot, fmt='.1f', ax=new_ax[0, 0], vmin=vmin, vmax=vmax, xticklabels=False,
+                     yticklabels=attr_labels, cbar=True, cbar_ax=cbar_ax, annot_kws={"size": fontsize})
+    h1.set_yticklabels(h1.get_yticklabels(), fontsize=fontsize, rotation=0)
+    new_ax[0, 0].set_ylabel('left entity attrs', fontdict={'fontsize': 14})
+    h2 = sns.heatmap(score2, annot=annot, fmt='.1f', ax=new_ax[0, 1], vmin=vmin, vmax=vmax, xticklabels=False,
+                     yticklabels=False, cbar=False, cbar_ax=None, annot_kws={"size": fontsize})
+    h3 = sns.heatmap(score3, annot=annot, fmt='.1f', ax=new_ax[1, 0], vmin=vmin, vmax=vmax, xticklabels=attr_labels,
+                     yticklabels=attr_labels, cbar=False, cbar_ax=None, annot_kws={"size": fontsize})
+    new_ax[1, 0].set_ylabel('right entity attrs', fontdict={'fontsize': 14})
+    new_ax[1, 0].set_xlabel('left entity attrs', fontdict={'fontsize': 14})
+    h3.set_xticklabels(h3.get_xticklabels(), rotation=0, fontsize=fontsize)
+    h3.set_yticklabels(h3.get_yticklabels(), rotation=0, fontsize=fontsize)
+    h4 = sns.heatmap(score4, annot=annot, fmt='.1f', ax=new_ax[1, 1], vmin=vmin, vmax=vmax, yticklabels=False,
+                     xticklabels=attr_labels, cbar=False, cbar_ax=None, annot_kws={"size": fontsize})
+    new_ax[1, 1].set_xlabel('right entity attrs', fontdict={'fontsize': 14})
+    h4.set_xticklabels(h4.get_xticklabels(), rotation=0, fontsize=fontsize)
+    # plt.subplots_adjust(top=0.99, wspace=0.01, hspace=0.01, right=0.88)
+    plt.subplots_adjust(top=0.92, wspace=0.01, hspace=0.01, right=0.88)
+
+    if title is not None:
+        fig.suptitle(title, fontsize=16)
+
+    if out_file_name is not None:
+        plt.savefig(out_file_name, bbox_inches='tight')
+
+    plt.show()

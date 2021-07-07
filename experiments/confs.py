@@ -10,7 +10,7 @@ class ConfCreator(object):
             'data_type': ['train', 'test', 'valid'],
             'permute': [True, False],
             'model_name': ['bert-base-uncased'],
-            'tok': ['sent_pair', 'attr_pair'],
+            'tok': ['attr_pair', 'sent_pair'],
             'size': [None],
             'fine_tune_method': ['simple', None], # ['advanced', 'simple', None],
             'extractor': ['attr_extractor'],

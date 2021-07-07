@@ -137,6 +137,8 @@ class EMDataset(Dataset):
         flat_features = {}
         for feature in features:
             flat_features[feature] = features[feature].squeeze(0)
+        flat_features['sent1'] = sent1
+        flat_features['sent2'] = sent2
 
         return entity1, entity2, flat_features
 

@@ -315,6 +315,9 @@ def benchmark_comparison_analysis(confs: list, plot_params: list, categories: li
                     cmp_vals.append(conf2[param])
                     break
 
+            print(conf1)
+            print(conf2)
+
             if agg_fns is not None:
                 res1 = aggregate_results(res1, agg_fns, target_agg_result_ids)
                 res2 = aggregate_results(res2, agg_fns, target_agg_result_ids)
@@ -322,7 +325,7 @@ def benchmark_comparison_analysis(confs: list, plot_params: list, categories: li
                 cmp_res = cmp_agg_results(res1, res2, target_cats=categories)
                 display_uc = [conf_creator.use_case_map[uc] for uc in conf_creator.conf_template['use_case']]
                 plot_agg_results(cmp_res, target_cats=categories, title_prefix=f'{cmp_vals[0]} vs {cmp_vals[1]}',
-                                 xticks=display_uc, vmin=-0.5, vmax=0.5)
+                                 xticks=display_uc, agg=True, vmin=-0.5, vmax=0.5)
 
             else:
                 cmp_res = cmp_benchmark_results(res1, res2)
@@ -333,76 +336,80 @@ def benchmark_comparison_analysis(confs: list, plot_params: list, categories: li
 
 if __name__ == '__main__':
 
-    # analysis_target = 'use_case'
-    analysis_target = 'benchmark'
-
-    # analysis_type = 'simple'
-    analysis_type = 'comparison'
-
     conf = {
-        'use_case': "Structured_Beer",
+        'use_case': "Structured_Fodors-Zagats",
         'data_type': 'train',
         'permute': False,
         'model_name': 'bert-base-uncased',
         'tok': 'sent_pair',
         'size': None,
-        'fine_tune_method': 'simple',
+        'fine_tune_method': None,
         'extractor': 'attr_extractor',
         'tester': 'attr_tester',
     }
-
-    # plot_params = ['match_attr_attn_loc', 'match_attr_attn_over_mean',
-    #                'avg_attr_attn', 'attr_attn_3_last', 'attr_attn_last_1',
-    #                'attr_attn_last_2', 'attr_attn_last_3',
-    #                'avg_attr_attn_3_last', 'avg_attr_attn_last_1',
-    #                'avg_attr_attn_last_2', 'avg_attr_attn_last_3']
-    plot_params = ['match_attr_attn_loc', 'match_attr_attn_over_mean',
-                   'avg_attr_attn', 'attr_attn_last_1',
-                   'attr_attn_last_2', 'attr_attn_last_3']
-
-    # aggregation
-    # agg_fns = None
-    # target_agg_result_ids = None
-    agg_fns = ['row_mean', 'row_std']
-    target_agg_result_ids = ['match_attr_attn_loc']
-
-    categories = ['all']
-
     conf_creator = ConfCreator()
     conf_creator.validate_conf(conf)
 
-    if analysis_target == 'use_case':
+    confs = conf_creator.get_confs(conf, ['use_case'])
 
-        if analysis_type == 'simple':
-            use_case_analysis(conf, plot_params, categories, agg_fns, target_agg_result_ids)
+    for conf in confs:
 
-        elif analysis_type == 'comparison':
-            comparison_params = ['tok']
-            # comparison_params = ['fine_tune_method']
-            confs = conf_creator.get_confs(conf, comparison_params)
-            use_case_comparison_analysis(confs, plot_params, categories)
+        analysis_target = 'use_case'
+        # analysis_target = 'benchmark'
+
+        analysis_type = 'simple'
+        # analysis_type = 'comparison'
+
+        # plot_params = ['match_attr_attn_loc', 'match_attr_attn_over_mean',
+        #                'avg_attr_attn', 'attr_attn_3_last', 'attr_attn_last_1',
+        #                'attr_attn_last_2', 'attr_attn_last_3',
+        #                'avg_attr_attn_3_last', 'avg_attr_attn_last_1',
+        #                'avg_attr_attn_last_2', 'avg_attr_attn_last_3']
+        plot_params = ['attr_attn_3_last', 'match_attr_attn_loc', 'match_attr_attn_over_mean',
+                       'avg_attr_attn', 'attr_attn_last_1',
+                       'attr_attn_last_2', 'attr_attn_last_3']
+        plot_params = ['match_attr_attn_over_mean']
+
+        # aggregation
+        agg_fns = None
+        target_agg_result_ids = None
+        # agg_fns = ['row_mean', 'row_std']
+        # target_agg_result_ids = ['match_attr_attn_loc']
+
+        categories = ['all']
+
+        if analysis_target == 'use_case':
+
+            if analysis_type == 'simple':
+                use_case_analysis(conf, plot_params, categories, agg_fns, target_agg_result_ids)
+
+            elif analysis_type == 'comparison':
+                # comparison_params = ['tok']
+                comparison_params = ['fine_tune_method']
+                confs = conf_creator.get_confs(conf, comparison_params)
+                use_case_comparison_analysis(confs, plot_params, categories)
+
+            else:
+                raise NotImplementedError()
+
+        elif analysis_target == 'benchmark':
+
+            bench_conf = conf.copy()
+            bench_conf['use_case'] = conf_creator.conf_template['use_case']
+
+            if analysis_type == 'simple':
+
+                benchmark_analysis(bench_conf, plot_params, categories, agg_fns, target_agg_result_ids)
+
+            elif analysis_type == 'comparison':
+                # comparison_params = ['tok']
+                comparison_params = ['fine_tune_method']
+                bench_confs = conf_creator.get_confs(bench_conf, comparison_params)
+
+                benchmark_comparison_analysis(bench_confs, plot_params, categories, agg_fns, target_agg_result_ids)
+
+            else:
+                raise NotImplementedError()
 
         else:
             raise NotImplementedError()
-
-    elif analysis_target == 'benchmark':
-
-        bench_conf = conf.copy()
-        bench_conf['use_case'] = conf_creator.conf_template['use_case']
-
-        if analysis_type == 'simple':
-
-            benchmark_analysis(bench_conf, plot_params, categories, agg_fns, target_agg_result_ids)
-
-        elif analysis_type == 'comparison':
-            comparison_params = ['tok']
-            # comparison_params = ['fine_tune_method']
-            bench_confs = conf_creator.get_confs(bench_conf, comparison_params)
-
-            benchmark_comparison_analysis(bench_confs, plot_params, categories, agg_fns, target_agg_result_ids)
-
-        else:
-            raise NotImplementedError()
-
-    else:
-        raise NotImplementedError()

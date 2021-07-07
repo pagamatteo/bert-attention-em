@@ -127,14 +127,14 @@ if __name__ == '__main__':
     }
 
     variable_params = {
-        'use_case': ["Dirty_DBLP-GoogleScholar"],
-        'data_type': ['train', 'test'],
-        'permute': [True],
+        'use_case': ["Structured_Fodors-Zagats"],
+        'data_type': ['train'],  #['train', 'test'],
+        'permute': [False],
         'model_name': ['bert-base-uncased'],
-        'tok': ['sent_pair', 'attr_pair'],  # 'sent_pair', 'attr', 'attr_pair'
+        'tok': ['sent_pair'],  # 'sent_pair', 'attr', 'attr_pair'
         'size': [None],
         'target_class': ['both'],  # 'both', 0, 1
-        'fine_tune_method': [None, 'simple', 'advanced'],  # None, 'simple', 'advanced'
+        'fine_tune_method': ['simple'],  # None, 'simple', 'advanced'
         'extractor': ['attr_extractor'],
         'tester': ['attr_tester'],
         'seeds': [[42, 42]]  # , [42, 24], [42, 12]]
@@ -145,7 +145,7 @@ if __name__ == '__main__':
     for conf in confs:
         conf.update(fixed_params)
 
-    save = True
+    save = False
     num_attempts = len(variable_params['seeds'])
 
     run(confs, num_attempts, save)
