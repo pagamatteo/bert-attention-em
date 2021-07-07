@@ -262,10 +262,10 @@ if __name__ == '__main__':
     # [END] INPUT PARAMS -----------------------------------------------------------------------------------------------
 
     # TEST 1
-    # test_dataset(conf)
+    test_dataset(conf)
 
     # TEST 2
-    test_sampler(conf, sampler_conf)
+    # test_sampler(conf, sampler_conf)
 
     # TEST 3
     # test_attn_extractor(conf, sampler_conf, fine_tune, ['attr_extractor'])
