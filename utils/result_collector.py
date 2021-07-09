@@ -101,3 +101,114 @@ class TestResultCollector(object):
                     extended_right[:right_shape[0], :right_shape[1]] = input_results[result_name][:]
 
                     self.results[result_name] = transform_fn(extended_left, extended_right)
+
+
+class BinaryClassificationResultsAggregator(object):
+
+    def __init__(self, data_key: str, label_col: str = 'label', pred_col: str = 'pred',
+                 target_categories: list = ['all']):
+
+        assert isinstance(data_key, str), "Wrong data type for parameter 'data_key'."
+        assert isinstance(label_col, str), "Wrong data type for parameter 'label_col'."
+        assert isinstance(pred_col, str), "Wrong data type for parameter 'pred_col'."
+        assert isinstance(target_categories, list), "Wrong data type for parameter 'target_categories'."
+        assert len(target_categories) > 0, "Empty target categories."
+
+        self.data_key = data_key
+        self.label_col = label_col
+        self.pred_col = pred_col
+        self.res_collector = TestResultCollector()
+        self.categories = ['all', 'all_pos', 'all_neg', 'all_pred_pos', 'all_pred_neg', 'tp', 'tn', 'fp', 'fn']
+        assert all(
+            [c in self.categories for c in target_categories]), "Wrong data format for parameter 'target_categories'."
+        self.target_categories = target_categories
+        self.agg_metrics = ['mean']
+
+    def _check_data_format(self, data: dict):
+        if data is not None:
+            assert isinstance(data, dict), "Wrong data type for parameter 'data'."
+            params = [self.data_key, self.label_col, self.pred_col]
+            assert all([p in data for p in params]), "Wrong data format for parameter 'data'."
+
+        return True
+
+    def _add_data_by_category(self, data: list, cat: str):
+        assert isinstance(data, list), "Wrong data type for parameter 'data'."
+        assert len(data) > 0, "Empty data."
+        assert isinstance(cat, str), "Wrong data type for parameter 'cat'."
+        assert cat in self.categories, "Wrong data format for parameter 'cat'."
+
+        if self.res_collector.get_result(cat) is None:
+            self.res_collector.save_result(data, cat)
+        else:
+            self.res_collector.transform_result(cat, transform_fn=lambda x: x + data)
+
+    def add_batch_data(self, batch: list):
+        assert isinstance(batch, list), "Wrong data type for parameter 'batch'."
+        assert len(batch) > 0, "Empty data."
+        assert all([self._check_data_format(data) for data in batch]), "Wrong data format for parameter 'batch'."
+
+        def _add_to_group(group, x, key):
+            if key not in group:
+                group[key] = [x]
+            else:
+                group[key].append(x)
+            return group
+
+        grouped_data = {}
+        for data in batch:
+            if data is None:
+                continue
+
+            label = data[self.label_col]
+            pred = data[self.pred_col]
+            values = data[self.data_key]
+
+            grouped_data = _add_to_group(grouped_data, values, 'all')
+
+            if label == 1:
+                grouped_data = _add_to_group(grouped_data, values, 'all_pos')
+
+                if pred == 1:
+                    grouped_data = _add_to_group(grouped_data, values, 'tp')
+                    grouped_data = _add_to_group(grouped_data, values, 'all_pred_pos')
+                else:
+                    grouped_data = _add_to_group(grouped_data, values, 'fn')
+                    grouped_data = _add_to_group(grouped_data, values, 'all_pred_neg')
+
+            else:
+                grouped_data = _add_to_group(grouped_data, values, 'all_neg')
+
+                if pred == 1:
+                    grouped_data = _add_to_group(grouped_data, values, 'fp')
+                    grouped_data = _add_to_group(grouped_data, values, 'all_pred_pos')
+                else:
+                    grouped_data = _add_to_group(grouped_data, values, 'tn')
+                    grouped_data = _add_to_group(grouped_data, values, 'all_pred_neg')
+
+        for cat in grouped_data:
+            if cat in self.target_categories:
+                self._add_data_by_category(grouped_data[cat], cat)
+
+    def aggregate(self, metric: str):
+        assert isinstance(metric, str), "Wrong data type for parameter 'metric'."
+        assert metric in self.agg_metrics, f"Wrong metric: {metric} not in {self.agg_metrics}."
+
+        out_data = {}
+        if metric == 'mean':
+            mean_res_collector = copy.deepcopy(self.res_collector)
+            mean_res_collector.transform_all(lambda x: np.array(x).mean(axis=0))
+            mean_data = mean_res_collector.get_results()
+
+            std_res_collector = copy.deepcopy(self.res_collector)
+            std_res_collector.transform_all(lambda x: np.array(x).std(axis=0))
+            std_data = std_res_collector.get_results()
+
+            for key in mean_data:
+                out_data[key] = {'mean': mean_data[key], 'std': std_data[key]}
+
+        for cat in self.target_categories:
+            if cat not in out_data:
+                out_data[cat] = None
+
+        return out_data
