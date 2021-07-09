@@ -2,8 +2,9 @@ import os
 from transformers import AutoTokenizer
 from utils.general import get_dataset, get_model, get_sample
 from pathlib import Path
-from explanation.gradient.plot_gradients import plot_grads
-from explanation.gradient.extractors import EntityGradientExtractor
+from explanation.gradient.plot_gradients import plot_grads, plot_batch_grads
+from explanation.gradient.extractors import EntityGradientExtractor, AggregateAttributeGradient
+import logging
 
 
 PROJECT_DIR = Path(__file__).parent.parent
@@ -12,8 +13,10 @@ MODELS_DIR = os.path.join(PROJECT_DIR, 'results', 'models')
 
 if __name__ == '__main__':
 
+    # [BEGIN] PARAMS
+
     conf = {
-        'use_case': "Structured_Fodors-Zagats",
+        'use_case': "Structured_Beer",
         'data_type': 'train',  # 'train', 'test', 'valid'
         'model_name': 'bert-base-uncased',
         'tok': 'sent_pair',  # 'sent_pair', 'attr', 'attr_pair'
@@ -26,12 +29,21 @@ if __name__ == '__main__':
     }
 
     sampler_conf = {
-        'size': 2,
+        'size': 10,
         'target_class': 'both',  # 'both', 0, 1
         'seeds': [42, 42],  # [42 -> class 0, 42 -> class 1]
     }
 
     fine_tune = 'simple'  # None, 'simple', 'advanced'
+
+    text_unit = 'words'
+    special_tokens = False
+    agg = 'mean'
+    target_categories = ['all', 'all_pos', 'all_neg', 'all_pred_pos', 'all_pred_neg', 'tp', 'tn', 'fp', 'fn']
+
+    # [END] PARAMS
+
+    # [BEGIN] MODEL AND DATA LOADING
 
     dataset = get_dataset(conf)
     use_case = conf['use_case']
@@ -49,12 +61,24 @@ if __name__ == '__main__':
     complete_sampler_conf['permute'] = conf['permute']
     sample = get_sample(dataset, complete_sampler_conf)
 
+    # [END] MODEL AND DATA LOADING
+
     entity_grad_extr = EntityGradientExtractor(
         model,
         tokenizer,
-        'attrs',
-        special_tokens=True
+        text_unit,
+        special_tokens=special_tokens,
     )
     grads_data = entity_grad_extr.extract(sample, sample.max_len)
 
-    plot_grads(grads_data, 'all')
+    if text_unit == 'attrs' and agg:
+        aggregator = AggregateAttributeGradient(grads_data, target_categories=target_categories)
+        agg_grads = aggregator.aggregate(agg)
+        for cat in agg_grads:
+            if agg_grads[cat] is None:
+                logging.info(f"No {cat} data.")
+            else:
+                plot_grads(agg_grads[cat], 'all', title=f'{agg} {cat} gradients')
+
+    else:
+        plot_batch_grads(grads_data, 'all')

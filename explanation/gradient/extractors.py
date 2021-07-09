@@ -7,6 +7,7 @@ from tqdm import tqdm
 import matplotlib
 from torch import nn
 from utils.bert_utils import get_entity_pair_attr_idxs, get_sent_pair_word_idxs
+from utils.result_collector import BinaryClassificationResultsAggregator
 
 
 class BaseGradientExtractor:
@@ -326,7 +327,7 @@ class EntityGradientExtractor(object):
             r_grad = grad[r_idxs[0][0]:r_idxs[0][1]]
         else:
             # sum the gradient scores that refer to the same unit (i.e., word or attribute)
-            l_grad = [np.sum(grad[l_idx[0]: l_idx[1]]) for l_idx in l_idxs]
+            l_grad = [np.sum(grad[l_idx[0]: l_idx[1]]) for l_idx in l_idxs]     # FIXME: add normalization by length?
             r_grad = [np.sum(grad[r_idx[0]: r_idx[1]]) for r_idx in r_idxs]
 
         if special_token_data is None:
@@ -431,3 +432,101 @@ class EntityGradientExtractor(object):
             out_grad_data.append(record_out_data)
 
         return out_grad_data
+
+
+class AggregateAttributeGradient(object):
+
+    def __init__(self, grads_data: list, target_categories: list = ['all']):
+        EntityGradientExtractor.check_extracted_grad(grads_data)
+
+        self.grads_data = grads_data
+        self.agg_metrics = ['mean']
+        self.target_categories = target_categories
+
+    def aggregate(self, metric: str):
+        assert isinstance(metric, str), "Wrong data type for parameter 'metric'."
+        assert metric in self.agg_metrics, f"Wrong metric: {metric} not in {self.agg_metrics}."
+
+        all_data = []
+        all_labels = None
+        left_data = []
+        left_labels = None
+        right_data = []
+        right_labels = None
+        for grad_data in self.grads_data:
+            item = {
+                'label': grad_data['label'],
+                'pred': grad_data['label']
+            }
+            grads = grad_data['grad']
+
+            if all_labels is not None:
+                assert grads['all'] == all_labels
+                assert grads['left'] == left_labels
+                assert grads['right'] == right_labels
+            else:
+                all_labels = grads['all']
+                left_labels = grads['left']
+                right_labels = grads['right']
+
+            all_item = item.copy()
+            all_item['grad'] = grads['all_grad']
+            all_data.append(all_item)
+            left_item = item.copy()
+            left_item['grad'] = grads['left_grad']
+            left_data.append(left_item)
+            right_item = item.copy()
+            right_item['grad'] = grads['right_grad']
+            right_data.append(right_item)
+
+        all_aggregator = BinaryClassificationResultsAggregator('grad', target_categories=self.target_categories)
+        all_aggregator.add_batch_data(all_data)
+        if metric == 'mean':
+            all_agg_data = all_aggregator.aggregate(metric)
+        else:
+            raise NotImplementedError()
+
+        left_aggregator = BinaryClassificationResultsAggregator('grad', target_categories=self.target_categories)
+        left_aggregator.add_batch_data(left_data)
+        if metric == 'mean':
+            left_agg_data = left_aggregator.aggregate(metric)
+        else:
+            raise NotImplementedError()
+
+        right_aggregator = BinaryClassificationResultsAggregator('grad', target_categories=self.target_categories)
+        right_aggregator.add_batch_data(right_data)
+        if metric == 'mean':
+            right_agg_data = right_aggregator.aggregate(metric)
+        else:
+            raise NotImplementedError()
+
+        out_data = {}
+        for cat in self.target_categories:
+
+            if all_agg_data[cat] is None:
+                out_data[cat] = None
+                continue
+
+            if metric == 'mean':
+                all_grad = all_agg_data[cat]['mean']
+                all_error_grad = all_agg_data[cat]['std']
+                left_grad = left_agg_data[cat]['mean']
+                left_error_grad = left_agg_data[cat]['std']
+                right_grad = right_agg_data[cat]['mean']
+                right_error_grad = right_agg_data[cat]['std']
+            else:
+                raise NotImplementedError()
+
+            out_data[cat] = {
+                'all': all_labels,
+                'all_grad': all_grad,
+                'all_error_grad': all_error_grad,
+                'left': left_labels,
+                'left_grad': left_grad,
+                'left_error_grad': left_error_grad,
+                'right': right_labels,
+                'right_grad': right_grad,
+                'right_error_grad': right_error_grad,
+            }
+
+        return out_data
