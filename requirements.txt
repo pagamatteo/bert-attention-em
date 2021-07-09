@@ -63,3 +63,4 @@ wget==3.2
 xxhash==2.0.2
 yarl==1.6.3
 networkx~=2.5.1
+nltk~=3.6.2
