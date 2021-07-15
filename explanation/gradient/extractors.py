@@ -280,22 +280,24 @@ class GradientExtractor(BaseGradientExtractor):
 
 class EntityGradientExtractor(object):
 
-    def __init__(self, model, tokenizer, text_unit: str, special_tokens: bool = False):
+    def __init__(self, model, tokenizer, text_unit: str, special_tokens: bool = False, show_progress: bool = True):
 
         assert isinstance(text_unit, str), "Wrong data type for parameter 'text_unit'."
         assert isinstance(special_tokens, bool), "Wrong data type for parameter 'special_tokens'."
         text_units = ['tokens', 'words', 'attrs']
         assert text_unit in text_units, f"Wrong text_unit: {text_unit} not in {text_units}."
+        assert isinstance(show_progress, bool), "Wrong data type for parameter 'show_progress'."
 
         self.tokenizer = tokenizer
         self.grad_extractor = GradientExtractor(
             model,
             nn.CrossEntropyLoss(),
             tokenizer,
-            show_progress=True,
+            show_progress=show_progress,
         )
         self.text_unit = text_unit
         self.special_tokens = special_tokens
+        self.grads_history = []
 
     def get_text_unit_grads(self, data: dict, grad: list, special_token_data: dict = None):
         assert isinstance(data, dict), "Wrong data type for parameter 'data'."
@@ -367,7 +369,7 @@ class EntityGradientExtractor(object):
                     else:
                         assert all([p in grad_data[key] for p in grad_params]), error_msg
 
-    def extract(self, data, max_len):
+    def extract(self, data, max_len=128):
 
         grads_data = self.grad_extractor.saliency_interpret(data)
 
@@ -430,6 +432,8 @@ class EntityGradientExtractor(object):
             }
 
             out_grad_data.append(record_out_data)
+
+        self.grads_history.append(out_grad_data)
 
         return out_grad_data
 
