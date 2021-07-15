@@ -106,22 +106,26 @@ class TestResultCollector(object):
 class BinaryClassificationResultsAggregator(object):
 
     def __init__(self, data_key: str, label_col: str = 'label', pred_col: str = 'pred',
-                 target_categories: list = ['all']):
+                 target_categories: list = None):
 
         assert isinstance(data_key, str), "Wrong data type for parameter 'data_key'."
         assert isinstance(label_col, str), "Wrong data type for parameter 'label_col'."
         assert isinstance(pred_col, str), "Wrong data type for parameter 'pred_col'."
-        assert isinstance(target_categories, list), "Wrong data type for parameter 'target_categories'."
-        assert len(target_categories) > 0, "Empty target categories."
+        if target_categories is not None:
+            assert isinstance(target_categories, list), "Wrong data type for parameter 'target_categories'."
+            assert len(target_categories) > 0, "Empty target categories."
 
         self.data_key = data_key
         self.label_col = label_col
         self.pred_col = pred_col
         self.res_collector = TestResultCollector()
         self.categories = ['all', 'all_pos', 'all_neg', 'all_pred_pos', 'all_pred_neg', 'tp', 'tn', 'fp', 'fn']
-        assert all(
-            [c in self.categories for c in target_categories]), "Wrong data format for parameter 'target_categories'."
-        self.target_categories = target_categories
+        if target_categories is not None:
+            assert all(
+                [c in self.categories for c in target_categories]), "Wrong data format for param 'target_categories'."
+            self.target_categories = target_categories
+        else:
+            self.target_categories = self.categories
         self.agg_metrics = ['mean']
 
     def _check_data_format(self, data: dict):
@@ -189,6 +193,13 @@ class BinaryClassificationResultsAggregator(object):
         for cat in grouped_data:
             if cat in self.target_categories:
                 self._add_data_by_category(grouped_data[cat], cat)
+
+    def get_results(self):
+        out_data = self.res_collector.get_results().copy()
+        for cat in self.target_categories:
+            if cat not in out_data:
+                out_data[cat] = None
+        return out_data
 
     def aggregate(self, metric: str):
         assert isinstance(metric, str), "Wrong data type for parameter 'metric'."

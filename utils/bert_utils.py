@@ -232,3 +232,61 @@ def get_entity_pair_attr_idxs(left_entity: pd.Series, right_entity: pd.Series, t
     }
 
     return out_data
+
+
+def tokenize_entity_pair(entity1: pd.Series, entity2: pd.Series, tokenizer, tokenize_method: str, max_len: int):
+
+    assert isinstance(entity1, pd.Series), "Wrong data type for param 'entity1'."
+    assert isinstance(entity2, pd.Series), "Wrong data type for param 'entity2'."
+    tok_methods = ['sent_pair', 'attr', 'attr_pair']
+    assert isinstance(tokenize_method, str), "Wrong data type for param 'tokenize_method'."
+    assert tokenize_method in tok_methods, f"tokenize method {tokenize_method} not in {tok_methods}."
+    assert isinstance(max_len, int), "Wrong data type for param 'max_len'."
+
+    if tokenize_method == 'sent_pair':
+
+        sent1 = ' '.join([str(val) for val in entity1.to_list()])  # if val != unk_token])
+        sent2 = ' '.join([str(val) for val in entity2.to_list()])  # if val != unk_token])
+
+        # Tokenize the text pairs
+        features = tokenizer(sent1, sent2, padding='max_length', truncation=True, return_tensors="pt",
+                             max_length=max_len, add_special_tokens=True, pad_to_max_length=True,
+                             return_attention_mask=True)
+
+    elif tokenize_method == 'attr':
+        sent = ""
+        for attr_val in entity1.to_list():
+            sent += "{} [SEP] ".format(str(attr_val))
+        for attr_val in entity2.to_list():
+            sent += "{} [SEP] ".format(str(attr_val))
+        sent = sent[:-7]  # remove last ' [SEP] '
+        features = tokenizer(sent, padding='max_length', truncation=True, return_tensors="pt", max_length=max_len,
+                             add_special_tokens=True, pad_to_max_length=True, return_attention_mask=True)
+        sent1 = sent[:]
+        sent2 = None
+
+    elif tokenize_method == 'attr_pair':
+        sent1 = ""
+        for attr_val in entity1.to_list():
+            sent1 += "{} [SEP] ".format(str(attr_val))
+        sent1 = sent1[:-7]  # remove last ' [SEP] '
+
+        sent2 = ""
+        for attr_val in entity2.to_list():
+            sent2 += "{} [SEP] ".format(str(attr_val))
+        sent2 = sent2[:-7]  # remove last ' [SEP] '
+
+        features = tokenizer(sent1, sent2, padding='max_length', truncation=True, return_tensors="pt",
+                             max_length=max_len, add_special_tokens=True, pad_to_max_length=True,
+                             return_attention_mask=True)
+
+    else:
+        raise ValueError("Wrong tokenization method.")
+
+    flat_features = {}
+    for feature in features:
+        flat_features[feature] = features[feature].squeeze(0)
+    flat_features['sent1'] = sent1
+    flat_features['sent2'] = sent2
+
+    return flat_features

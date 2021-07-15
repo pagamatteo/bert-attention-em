@@ -14,13 +14,13 @@ def get_synonyms_from_sent(word, sent):
     return synonyms
 
 
-def get_synonyms_from_sent_pair(words1, words2, topk: int = None):
+def get_synonyms_from_sent_pair(words1, words2, num_words: int = None):
     assert isinstance(words1, list), "Wrong data type for parameter 'words1'."
     assert all([isinstance(w, str) for w in words1]), "Wrong data format for parameter 'words1'."
     assert isinstance(words2, list), "Wrong data type for parameter 'words2'."
     assert all([isinstance(w, str) for w in words2]), "Wrong data format for parameter 'words2'."
-    if topk is not None:
-        assert isinstance(topk, int), "Wrong data type for parameter 'topk'."
+    if num_words is not None:
+        assert isinstance(num_words, int), "Wrong data type for parameter 'topk'."
 
     synonyms = []
     for word in words1:
@@ -37,12 +37,10 @@ def get_synonyms_from_sent_pair(words1, words2, topk: int = None):
     if len(synonyms) == 0:
         return None
 
-    if topk is None:
+    if num_words is None:
         out_data = synonyms
-    elif topk == 1:
-        out_data = synonyms[0]
     else:
-        out_data = synonyms[:topk]
+        out_data = synonyms[:num_words]
 
     return out_data
 
@@ -77,8 +75,6 @@ def get_random_words_from_sent_pair(words1, words2, num_words: int, exclude_syno
 
         words.append({'left': w1, 'right': w2})
 
-    if num_words == 1:
-        return words[0]
     return words
 
 
@@ -91,6 +87,7 @@ def get_common_words_from_sent_pair(words1, words2, num_words: int, seed: int = 
     assert isinstance(seed, int), "Wrong data type for parameter 'seed'."
 
     common_words = set(words1).intersection(set(words2))
+    common_words = sorted(list(common_words))
     if len(common_words) == 0:
         logging.info("No common words found.")
         return None
@@ -107,13 +104,23 @@ def get_common_words_from_sent_pair(words1, words2, num_words: int, seed: int = 
 
     words = list(words)
 
-    if num_words == 1:
-        return {'left': words[0], 'right': words[0]}
     return [{'left': w, 'right': w} for w in words]
+
+
+def get_synonyms_or_common_words_from_sent_pair(words1, words2, num_words: int, seed: int = 42):
+    synonyms = get_synonyms_from_sent_pair(words1, words2, num_words=num_words)
+    if synonyms is None:
+        return get_common_words_from_sent_pair(words1, words2, num_words, seed=seed)
+    if len(synonyms) == num_words:
+        return synonyms
+    common_words = get_common_words_from_sent_pair(words1, words2, num_words-len(synonyms), seed=seed)
+    if common_words is None:
+        return synonyms
+    return synonyms + common_words
 
 
 def simple_tokenization_and_clean(text: str):
     assert isinstance(text, str), "Wrong data type for parameter 'text'."
 
     # remove non-alphabetical and short words
-    return [word for word in text.split() if word.isalpha() and len(word) > 3]
+    return [word for word in text.split() if len(word) > 1]# if word.isalpha() and len(word) > 3]

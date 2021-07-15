@@ -3,6 +3,7 @@ import torch
 from torch.utils.data import Dataset
 from transformers import AutoTokenizer
 import pandas as pd
+from utils.bert_utils import tokenize_entity_pair
 
 
 class EMDataset(Dataset):
@@ -87,61 +88,6 @@ class EMDataset(Dataset):
     def __len__(self):
         return len(self.data)
 
-    def convert_to_features(self, entity1, entity2):
-
-        if self.tokenization == 'sent_pair':
-
-            sent1 = ' '.join([str(val) for val in entity1.to_list()])  # if val != unk_token])
-            sent2 = ' '.join([str(val) for val in entity2.to_list()])  # if val != unk_token])
-
-            # Tokenize the text pairs
-            features = self.tokenizer(sent1, sent2, padding='max_length',
-                                      truncation=True, return_tensors="pt",
-                                      max_length=self.max_len,
-                                      add_special_tokens=True,
-                                      pad_to_max_length=True,
-                                      return_attention_mask=True)
-
-        elif self.tokenization == 'attr':
-            sent = ""
-            for attr_val in entity1.to_list():
-                sent += "{} [SEP] ".format(str(attr_val))
-            for attr_val in entity2.to_list():
-                sent += "{} [SEP] ".format(str(attr_val))
-            sent = sent[:-7]  # remove last ' [SEP] '
-            features = self.tokenizer(sent, padding='max_length',
-                                      truncation=True, return_tensors="pt",
-                                      max_length=self.max_len,
-                                      add_special_tokens=True,
-                                      pad_to_max_length=True,
-                                      return_attention_mask=True)
-
-        elif self.tokenization == 'attr_pair':
-            sent1 = ""
-            for attr_val in entity1.to_list():
-                sent1 += "{} [SEP] ".format(str(attr_val))
-            sent1 = sent1[:-7]  # remove last ' [SEP] '
-
-            sent2 = ""
-            for attr_val in entity2.to_list():
-                sent2 += "{} [SEP] ".format(str(attr_val))
-            sent2 = sent2[:-7]  # remove last ' [SEP] '
-
-            features = self.tokenizer(sent1, sent2, padding='max_length',
-                                      truncation=True, return_tensors="pt",
-                                      max_length=self.max_len,
-                                      add_special_tokens=True,
-                                      pad_to_max_length=True,
-                                      return_attention_mask=True)
-
-        flat_features = {}
-        for feature in features:
-            flat_features[feature] = features[feature].squeeze(0)
-        flat_features['sent1'] = sent1
-        flat_features['sent2'] = sent2
-
-        return entity1, entity2, flat_features
-
     def __getitem__(self, idx):
         row = self.X.iloc[idx]
         label = self.labels.iloc[idx]
@@ -169,7 +115,7 @@ class EMDataset(Dataset):
                 permuted_val = ' '.join(np.random.permutation(str(val).split()))
                 left_row[attr] = permuted_val
 
-        left_row, right_row, tokenized_row = self.convert_to_features(left_row, right_row)
+        tokenized_row = tokenize_entity_pair(left_row, right_row, self.tokenizer, self.tokenization, self.max_len)
         tokenized_row['labels'] = torch.tensor(label, dtype=torch.long)
         if self.categories is not None:
             tokenized_row['category'] = category
