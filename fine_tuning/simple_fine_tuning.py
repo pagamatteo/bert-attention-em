@@ -103,6 +103,7 @@ def evaluate(model_path: str, eval_dataset: EMDataset):
         logits = outputs['logits']
         # attns = outputs['attentions']
         pred = torch.argmax(logits, axis=1).tolist()
+        print(pred, label)
         preds.append(pred)
 
     print("F1: {}".format(f1_score(labels, preds)))
