@@ -16,7 +16,7 @@ RESULTS_DIR = os.path.join(PROJECT_DIR, 'results', 'models', 'simple')
 
 
 def train(model_name: str, num_epochs: int, train_dataset: EMDataset, val_dataset: EMDataset,
-          out_model_path: str = None):
+          out_model_path: str = None, only_classification_layer: bool = False):
           
     print("Starting fine-tuning...")
 
@@ -26,6 +26,7 @@ def train(model_name: str, num_epochs: int, train_dataset: EMDataset, val_datase
     assert isinstance(val_dataset, EMDataset), "Wrong data type for parameter 'val_dataset'."
     if out_model_path is not None:
         assert isinstance(out_model_path, str), "Wrong data type for parameter 'out_model_path'."
+    assert isinstance(only_classification_layer, bool), "Wrong data type for parameter 'only_classification_layer'."
 
     training_args = TrainingArguments(
         output_dir=os.path.join(RESULTS_DIR, 'results'),  # output directory
@@ -40,10 +41,17 @@ def train(model_name: str, num_epochs: int, train_dataset: EMDataset, val_datase
         seed=42,
     )
 
-    def model_init():
-        return AutoModelForSequenceClassification.from_pretrained(model_name,
-                                                                  num_labels=2,
-                                                                  output_attentions=True)
+    if not only_classification_layer:
+        def model_init():
+            return AutoModelForSequenceClassification.from_pretrained(model_name,
+                                                                      num_labels=2,
+                                                                      output_attentions=True)
+    else:
+        def model_init():
+            m = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=2, output_attentions=True)
+            for param in m.bert.bert.parameters():
+                param.requires_grad = False
+            return m
 
     metric = load_metric("f1")
 
