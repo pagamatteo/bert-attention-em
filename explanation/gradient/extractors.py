@@ -8,6 +8,9 @@ import matplotlib
 from torch import nn
 from utils.bert_utils import get_entity_pair_attr_idxs, get_sent_pair_word_idxs
 from utils.result_collector import BinaryClassificationResultsAggregator
+import pathlib
+import pickle
+import os
 
 
 class BaseGradientExtractor:
@@ -369,7 +372,7 @@ class EntityGradientExtractor(object):
                     else:
                         assert all([p in grad_data[key] for p in grad_params]), error_msg
 
-    def extract(self, data, max_len=128):
+    def extract(self, data, max_len=128, out_path=None):
 
         grads_data = self.grad_extractor.saliency_interpret(data)
 
@@ -434,6 +437,13 @@ class EntityGradientExtractor(object):
             out_grad_data.append(record_out_data)
 
         self.grads_history.append(out_grad_data)
+
+        if out_path is not None:
+            out_dir_path = out_path.split(os.sep)
+            out_dir = os.sep.join(out_dir_path[:-1])
+            pathlib.Path(out_dir).mkdir(parents=True, exist_ok=True)
+            with open(f'{out_path}.pkl', 'wb') as f:
+                pickle.dump(out_grad_data, f)
 
         return out_grad_data
 

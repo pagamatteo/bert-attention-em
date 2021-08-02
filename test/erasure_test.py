@@ -136,6 +136,7 @@ if __name__ == '__main__':
                                                         only_left_word=experiment_conf['only_left_word'],
                                                         only_right_word=experiment_conf['only_right_word'])
         delta_score_res = delta_pred_extractor.extract(sample)
+        exit(1)
 
         # TODO: for the gradient experiment get gradient and delta scores and compute the tau rank correlation
 
