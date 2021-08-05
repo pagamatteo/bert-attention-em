@@ -93,7 +93,7 @@ class BaseGradientExtractor:
         else:
             encoder_attribute = self.kwargs.get("encoder")
             assert encoder_attribute, "Your model doesn't have 'get_input_embeddings' method, thus you " \
-                "have provide 'encoder' key argument while initializing SaliencyInterpreter object"
+                                      "have provide 'encoder' key argument while initializing SaliencyInterpreter object"
             embedding_layer = getattr(self.model, encoder_attribute).embeddings
         return embedding_layer
 
@@ -117,7 +117,7 @@ class BaseGradientExtractor:
         colored_string += template.format(0, "    Label: {} |".format(instance['label']))
         prob = instance['prob']
         color = matplotlib.colors.rgb2hex(prob_cmap(prob)[:3])
-        colored_string += template.format(color, "{:.2f}%".format(instance['prob']*100)) + '|'
+        colored_string += template.format(color, "{:.2f}%".format(instance['prob'] * 100)) + '|'
         return colored_string
 
     @property
@@ -200,6 +200,7 @@ class GradientExtractor(BaseGradientExtractor):
     """
     This class extracts Integrated Gradients (https://arxiv.org/abs/1703.01365)
     """
+
     def __init__(self,
                  model,
                  criterion,
@@ -217,7 +218,6 @@ class GradientExtractor(BaseGradientExtractor):
         iterator = tqdm(test_dataloader) if self.show_progress else test_dataloader
 
         for batch in iterator:
-
             # we will store there batch outputs such as gradients, probability, tokens
             # so as each of them are used in different places, for convenience we will create
             # it as attribute:
@@ -282,6 +282,7 @@ class GradientExtractor(BaseGradientExtractor):
 
 
 class EntityGradientExtractor(object):
+    grad_agg_fns = {'sum': np.sum, 'max': np.max, 'avg': np.mean, 'median': np.median}
 
     def __init__(self, model, tokenizer, text_unit: str, special_tokens: bool = False, show_progress: bool = True):
 
@@ -318,29 +319,42 @@ class EntityGradientExtractor(object):
 
         l = data['left_names']
         r = data['right_names']
+        l_idxs = data['left_idxs']
+        r_idxs = data['right_idxs']
+        if len(l_idxs) > 1:
+            l = l[:len(l_idxs)]
+            r = r[:len(r_idxs)]
+
         if special_token_data is None:
             all_units = l + r
         else:
             special_tokens = special_token_data['names']
             all_units = [special_tokens[0]] + l + [special_tokens[1]] + r + [special_tokens[2]]
 
-        l_idxs = data['left_idxs']
-        r_idxs = data['right_idxs']
-
         if self.text_unit == 'tokens':
             l_grad = grad[l_idxs[0][0]:l_idxs[0][1]]
             r_grad = grad[r_idxs[0][0]:r_idxs[0][1]]
         else:
-            # sum the gradient scores that refer to the same unit (i.e., word or attribute)
-            l_grad = [np.sum(grad[l_idx[0]: l_idx[1]]) for l_idx in l_idxs]     # FIXME: add normalization by length?
-            r_grad = [np.sum(grad[r_idx[0]: r_idx[1]]) for r_idx in r_idxs]
+            # aggregate the gradient scores that refer to the same unit (i.e., word or attribute)
+            l_grad = {}
+            r_grad = {}
+            for grad_agg_fn_name, grad_agg_fn in EntityGradientExtractor.grad_agg_fns.items():
+                l_grad[grad_agg_fn_name] = [grad_agg_fn(grad[l_idx[0]: l_idx[1]]) for l_idx in l_idxs]
+                r_grad[grad_agg_fn_name] = [grad_agg_fn(grad[r_idx[0]: r_idx[1]]) for r_idx in r_idxs]
 
         if special_token_data is None:
-            all_grad = l_grad + r_grad
+            if isinstance(l_grad, dict):
+                all_grad = {k: l_grad[k] + r_grad[k] for k in l_grad}
+            else:
+                all_grad = l_grad + r_grad
         else:
             special_idxs = special_token_data['idxs']
             special_grads = np.array(grad)[special_idxs]
-            all_grad = [special_grads[0]] + l_grad + [special_grads[1]] + r_grad + [special_grads[2]]
+            if isinstance(l_grad, dict):
+                all_grad = {k: [special_grads[0]] + l_grad[k] + [special_grads[1]] + r_grad[k] + [special_grads[2]] for
+                            k in l_grad}
+            else:
+                all_grad = [special_grads[0]] + l_grad + [special_grads[1]] + r_grad + [special_grads[2]]
 
         out_data = {
             'all': all_units,
@@ -389,8 +403,8 @@ class EntityGradientExtractor(object):
 
             if self.text_unit == 'tokens':
                 data_for_grad = {
-                    'left_names': [f'l_{t}' for t in tokens[1:sep_idx]],            # remove [CLS]
-                    'right_names': [f'r_{t}' for t in tokens[sep_idx + 1: -1]],     # remove two [SEP]
+                    'left_names': [f'l_{t}' for t in tokens[1:sep_idx]],  # remove [CLS]
+                    'right_names': [f'r_{t}' for t in tokens[sep_idx + 1: -1]],  # remove two [SEP]
                     'left_idxs': [(1, sep_idx)],
                     'right_idxs': [(sep_idx + 1, len(tokens) - 1)]
                 }
@@ -470,7 +484,7 @@ class AggregateAttributeGradient(object):
         for grad_data in self.grads_data:
             item = {
                 'label': grad_data['label'],
-                'pred': grad_data['label']
+                'pred': grad_data['pred']
             }
             grads = grad_data['grad']
 
