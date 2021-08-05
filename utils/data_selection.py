@@ -1,3 +1,5 @@
+import logging
+
 from models.em_dataset import EMDataset
 import pandas as pd
 
@@ -31,7 +33,10 @@ class Sampler(object):
         out_data = self.data[self.data[label_col] == label_val]
 
         if size is not None:
-            assert size <= len(out_data)
+            if size > len(out_data):
+                old_size = size
+                size = len(out_data)
+                print(f"No enough data for size {old_size}. Taken {size} records.")
 
             out_data = out_data.sample(size, random_state=seed)
 
