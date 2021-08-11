@@ -86,6 +86,8 @@ if __name__ == '__main__':
                  "Structured_iTunes-Amazon", "Textual_Abt-Buy", "Dirty_iTunes-Amazon", "Dirty_DBLP-ACM",
                  "Dirty_DBLP-GoogleScholar", "Dirty_Walmart-Amazon"]
     # use_cases = ["Structured_Fodors-Zagats"]
+    # use_cases = ["Structured_iTunes-Amazon", "Textual_Abt-Buy", "Dirty_iTunes-Amazon", "Dirty_DBLP-ACM",
+    #              "Dirty_DBLP-GoogleScholar", "Dirty_Walmart-Amazon"]
 
     conf = {
         'data_type': 'train',  # 'train', 'test', 'valid'
@@ -108,32 +110,44 @@ if __name__ == '__main__':
     fine_tune = 'simple'  # None, 'simple', 'advanced'
 
     grad_conf = {
-        'text_unit': 'attrs',
+        'text_unit': 'words',
         'special_tokens': True,
         'agg': None,  # 'mean'
         'agg_target_cat': ['all', 'all_pos', 'all_neg', 'all_pred_pos', 'all_pred_neg', 'tp', 'tn', 'fp', 'fn']
     }
 
-    experiment = 'plot_grad'  # 'compute_grad', 'plot_grad', 'word_grad_analysis', 'cmp_grad'
+    # 'compute_grad', 'plot_grad', 'topk_word_grad', 'topk_word_grad_by_attr', 'topk_word_grad_by_attr_similarity'
+    experiment = 'topk_word_grad_by_attr_similarity'
 
     # [END] PARAMS
 
     start = time.time()
 
     if experiment == 'compute_grad':
-        processes = []
+        # no multi process
         for use_case in use_cases:
+            print(use_case)
+
+            if not use_case == 'Structured_DBLP-ACM':
+                continue
+
             uc_conf = conf.copy()
             uc_conf['use_case'] = use_case
-            p = Process(target=run_gradient_test,
-                        args=(uc_conf, sampler_conf, fine_tune, grad_conf, MODELS_DIR, RESULT_DIR,))
-            processes.append(p)
+            run_gradient_test(uc_conf, sampler_conf, fine_tune, grad_conf, MODELS_DIR, RESULT_DIR)
 
-        for p in processes:
-            p.start()
-
-        for p in processes:
-            p.join()
+        # processes = []
+        # for use_case in use_cases:
+        #     uc_conf = conf.copy()
+        #     uc_conf['use_case'] = use_case
+        #     p = Process(target=run_gradient_test,
+        #                 args=(uc_conf, sampler_conf, fine_tune, grad_conf, MODELS_DIR, RESULT_DIR,))
+        #     processes.append(p)
+        #
+        # for p in processes:
+        #     p.start()
+        #
+        # for p in processes:
+        #     p.join()
 
     elif experiment == 'plot_grad':
         if grad_conf['text_unit'] == 'attrs':
@@ -152,19 +166,55 @@ if __name__ == '__main__':
                 plot_batch_grads(uc_grad, 'all', title_prefix=use_case, out_plot_name=out_plot_name,
                                  ignore_special=True)
 
-    elif experiment == 'word_grad_analysis':
-        stats_data = {}
+    elif experiment in ['topk_word_grad', 'topk_word_grad_by_attr', 'topk_word_grad_by_attr_similarity']:
+        stats_data = []
         for use_case in use_cases:
             uc_grad = load_saved_grads_data(use_case, conf, sampler_conf, fine_tune, grad_conf)
-            analyzer = TopKGradientAnalyzer(uc_grad, topk=5)
-            analyzed_data = analyzer.analyze('pos', target_categories=['all', 'all_pos', 'all_neg'])
-            stats_data[use_case] = analyzed_data
+            if experiment == 'topk_word_grad':
+                analyzer = TopKGradientAnalyzer(uc_grad, topk=5)
+                analyzed_data = analyzer.analyze('pos', by_attr=False, target_categories=['all', 'all_pos', 'all_neg'])
+            else:
+                uc_conf = conf.copy()
+                uc_conf['use_case'] = use_case
+                dataset = get_dataset(uc_conf)
+                uc_sampler_conf = sampler_conf.copy()
+                uc_sampler_conf['permute'] = uc_conf['permute']
+                sample = get_sample(dataset, uc_sampler_conf)
+
+                if experiment == 'topk_word_grad_by_attr':
+                    analyzer = TopKGradientAnalyzer(uc_grad, topk=3)
+                    analyzed_data = analyzer.analyze('pos', by_attr=True, target_categories=['all'], entities=sample)
+                else:
+                    topk_range = [1, 3, 5, 10]
+                    # topk_range = [3]
+                    target_categories = ['all_pos']
+                    analyzed_data = {}
+                    for topk in topk_range:
+                        analyzer = TopKGradientAnalyzer(uc_grad, topk=topk)
+                        single_analyzed_data = analyzer.analyze('sim', by_attr=True,
+                                                                target_categories=target_categories, entities=sample)
+                        analyzed_data.update(single_analyzed_data)
+
+                    if len(target_categories) == 1 and len(topk_range) > 1:
+                        analyzed_data_table = pd.concat(list(analyzed_data.values()), axis=0)
+                        analyzed_data_table.index = list(analyzed_data.keys())
+                        analyzed_data = {
+                            target_categories[0]: analyzed_data_table
+                        }
+
+            if len(stats_data) == 0:
+                for key in analyzed_data:
+                    stats_data.append({use_case: analyzed_data[key]})
+            else:
+                for i, key in enumerate(analyzed_data):
+                    stats_data[i][use_case] = analyzed_data[key]
 
         out_plot_name = os.path.join(RESULT_DIR, f"word_grad_analysis_{conf['tok']}_{sampler_conf['size']}.pdf")
-        plot_top_grad_stats(stats_data, out_plot_name=out_plot_name)
+        if experiment == 'topk_word_grad_by_attr':
+            plot_top_grad_stats(stats_data, out_plot_name=out_plot_name)
+        else:
+            plot_top_grad_stats(stats_data, out_plot_name=out_plot_name, stacked=False, share_legend=False)
 
-    elif experiment == 'cmp_grad':
-        pass
     else:
         raise ValueError("Experiment not found.")
 

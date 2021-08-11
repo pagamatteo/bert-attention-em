@@ -250,7 +250,7 @@ def plot_multi_use_case_grads(conf, sampler_conf, fine_tune, grads_conf, use_cas
     plt.show()
 
 
-def plot_top_grad_stats(stats_data: dict, out_plot_name: str = None):
+def _plot_top_grad_stats(stats_data: dict, out_plot_name: str = None, stacked=True, share_legend=True):
     ncols = 4
     nrows = 3
     if len(stats_data) == 1:
@@ -267,7 +267,7 @@ def plot_top_grad_stats(stats_data: dict, out_plot_name: str = None):
             ax = axes
 
         use_case_stats = stats_data[use_case]
-        use_case_stats.plot(kind='bar', stacked=True, ax=ax, legend=False, rot=0)
+        use_case_stats.plot(kind='bar', stacked=stacked, ax=ax, legend=not share_legend, rot=0)
         ax.set_title(use_case, fontsize=18)
         if idx % ncols == 0:
             ax.set_ylabel('Percent', fontsize=20)
@@ -283,9 +283,15 @@ def plot_top_grad_stats(stats_data: dict, out_plot_name: str = None):
         #             horizontalalignment='center',
         #             verticalalignment='center')
 
-    handles, labels = ax.get_legend_handles_labels()
-    fig.legend(handles, labels, bbox_to_anchor=(0.73, 0.08), ncol=4, fontsize=20)
+    if share_legend:
+        handles, labels = ax.get_legend_handles_labels()
+        fig.legend(handles, labels, bbox_to_anchor=(0.73, 0.08), ncol=4, fontsize=20)
     plt.subplots_adjust(wspace=0.1, hspace=0.4)
-    if out_plot_name:
-        plt.savefig(out_plot_name, bbox_inches='tight')
+    # if out_plot_name:
+    #     plt.savefig(out_plot_name, bbox_inches='tight')
     plt.show()
+
+
+def plot_top_grad_stats(stats_data: list, out_plot_name: str = None, stacked=True, share_legend=True):
+    for stats in stats_data:
+        _plot_top_grad_stats(stats, out_plot_name=out_plot_name, stacked=stacked, share_legend=share_legend)
