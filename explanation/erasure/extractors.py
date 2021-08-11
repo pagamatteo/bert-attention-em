@@ -5,6 +5,9 @@ from scipy.spatial.distance import jensenshannon
 from tqdm import tqdm
 import logging
 import numpy as np
+import pathlib
+import pickle
+import os
 
 from models.em_dataset import EMDataset
 from utils.bert_utils import tokenize_entity_pair
@@ -74,8 +77,10 @@ class DeltaPredictionExtractor(object):
                             assert isinstance(text_unit_res_by_metric, dict), error_msg
                             assert all([p in text_unit_res_by_metric for p in second_level_params]), error_msg
 
-    def extract(self, data: EMDataset):
-        assert isinstance(data, EMDataset), "Wrong data type for parameter 'data'."
+    def extract(self, data: EMDataset, out_file: str = None):
+        # assert isinstance(data, EMDataset), "Wrong data type for parameter 'data'."
+        if out_file is not None:
+            assert isinstance(out_file, str), "Wrong data type for parameter 'out_file'."
 
         def _get_pred(model, features):
 
@@ -158,7 +163,8 @@ class DeltaPredictionExtractor(object):
                 word_pairs_to_remove = word_selector_fn(left_params['words'], right_params['words'], row_idx)
 
             elif word_sel_fn_name in ['gradient']:
-                word_pairs_to_remove = word_selector_fn(left_params['entity'], right_params['entity'], features)
+                # word_pairs_to_remove = word_selector_fn(left_params['entity'], right_params['entity'], features)
+                word_pairs_to_remove = word_selector_fn(left_params['entity'], right_params['entity'], row_idx)
 
             else:
                 raise ValueError("Too many arguments expected by the word_selector_fn.")
@@ -250,10 +256,15 @@ class DeltaPredictionExtractor(object):
                             word_pairs_to_remove_map[attr] = attr_word_pairs_to_remove
 
                 if len(word_pairs_to_remove_map) > 0:
+                    # if the tokens are extracted at attribute level, check that one pair of tokens is extracted for
+                    # each attribute
+                    if all([k in list(left_entity.index) for k in word_pairs_to_remove_map]):
+                        assert sorted(list(left_entity.index)) == sorted(list(word_pairs_to_remove_map))
                     word_pairs_by_sel_fn[word_sel_fn_name] = word_pairs_to_remove_map
 
             # skip the current row if none of the word selector functions have extracted some words to remove
             if len(word_pairs_by_sel_fn) != len(self.word_selector_fns):
+                idx += 1
                 continue
 
             # get the model prediction for the original pair of sentences
@@ -332,7 +343,7 @@ class DeltaPredictionExtractor(object):
                         else:
                             delta_res_params['pair'].append(pair_delta_scores)
 
-                        # if a word has been removed from both entities and the only_left_word and only_right_word flags
+                        # if a word has been removed from both entities and the only_left_word or only_right_word flags
                         # are enabled, then measure the delta score even in the case of removing a single word
                         if word_pairs[k]['left'] is not None and word_pairs[k]['right'] is not None:
                             # get the model prediction for a pair of entities where only the left word has been removed
@@ -372,6 +383,13 @@ class DeltaPredictionExtractor(object):
 
                 out_data[word_sel_fn_name].append(delta_res)
             idx += 1
+
+        if out_file:
+            out_dir_path = out_file.split(os.sep)
+            out_dir = os.sep.join(out_dir_path[:-1])
+            pathlib.Path(out_dir).mkdir(parents=True, exist_ok=True)
+            with open(f'{out_file}.pkl', 'wb') as f:
+                pickle.dump(out_data, f)
 
         return out_data
 
@@ -417,7 +435,7 @@ class AggregateDeltaPredictionScores(object):
             results = {}
             # loop over the records that generated the results
             for record in word_sel_method_res:
-                # loop over the text unit
+                # loop over the text unit (i.e., sent or attribute)
                 for text_unit in record:
                     text_unit_res = record[text_unit]
                     # loop over the methods used to remove the words (i.e., pair, left, right)
@@ -425,7 +443,8 @@ class AggregateDeltaPredictionScores(object):
                     for word_rem_method in ['pair', 'left', 'right']:
                         if word_rem_method in text_unit_res and text_unit_res[word_rem_method] is not None:
                             res = params.copy()
-                            res.update(text_unit_res[word_rem_method])
+                            avg_scores = pd.DataFrame(text_unit_res[word_rem_method])
+                            res.update(dict(avg_scores.mean()))
 
                             if text_unit not in results:
                                 results[text_unit] = {word_rem_method: [res]}
