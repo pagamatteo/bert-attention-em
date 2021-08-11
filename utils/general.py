@@ -2,6 +2,7 @@ import os
 import pandas as pd
 from transformers import AutoModel, AutoModelForSequenceClassification
 from pathlib import Path
+from collections import OrderedDict
 
 from utils.data_collector import DataCollector
 from models.em_dataset import EMDataset
@@ -11,13 +12,11 @@ from attention.extractors import AttributeAttentionExtractor
 from attention.testers import GenericAttributeAttentionTest
 from attention.analyzers import AttentionMapAnalyzer
 
-
 PROJECT_DIR = Path(__file__).parent.parent
 MODELS_DIR = os.path.join(PROJECT_DIR, 'results', 'models')
 
 
 def get_use_case(use_case: str):
-
     data_collector = DataCollector()
     use_case_dir = data_collector.get_data(use_case)
 
@@ -25,7 +24,6 @@ def get_use_case(use_case: str):
 
 
 def get_dataset(conf: dict):
-
     assert isinstance(conf, dict), "Wrong data type for parameter 'conf'."
     params = ['use_case', 'data_type', 'model_name', 'tok', 'label_col', 'left_prefix', 'right_prefix', 'max_len',
               'verbose', 'permute']
@@ -61,7 +59,6 @@ def get_dataset(conf: dict):
 
 
 def get_sample(dataset: EMDataset, sampler_conf: dict):
-
     assert isinstance(sampler_conf, dict), "Wrong data type for parameter 'sampler_conf'."
     params = ['size', 'target_class', 'permute', 'seeds']
     assert all([p in sampler_conf for p in params]), "Wrong value for parameter 'sampler_conf'."
@@ -81,14 +78,13 @@ def get_sample(dataset: EMDataset, sampler_conf: dict):
         sample = sampler.get_balanced_data(size=size, seeds=seeds)
     elif target_class == 0:
         sample = sampler.get_non_match_data(size=size, seed=seeds[0])
-    else:   # target_class = 1
+    else:  # target_class = 1
         sample = sampler.get_match_data(size=size, seed=seeds[1])
 
     return sample
 
 
 def get_model(model_name: str, fine_tune: str = None, model_path: str = None):
-
     assert isinstance(model_name, str), "Wrong data type for parameter 'model_name'."
     if fine_tune is not None:
         assert isinstance(fine_tune, str), "Wrong data type for parameter 'fine_tune'."
@@ -109,14 +105,13 @@ def get_model(model_name: str, fine_tune: str = None, model_path: str = None):
     else:
         if fine_tune == 'simple':
             model = AutoModelForSequenceClassification.from_pretrained(model_path)
-        else:   # fine_tune = 'advanced':
+        else:  # fine_tune = 'advanced':
             model = MatcherTransformer.load_from_checkpoint(checkpoint_path=model_path)
 
     return model
 
 
 def get_extractors(extractor_params: dict):
-
     assert isinstance(extractor_params, dict), "Wrong data type for parameter 'extractor_params'."
     available_extractors = ['attr_extractor']
     for ex in extractor_params:
@@ -146,7 +141,6 @@ def get_extractors(extractor_params: dict):
 
 
 def get_testers(tester_params: dict):
-
     assert isinstance(tester_params, dict), "Wrong data type for parameter 'tester_params'."
     available_testers = ['attr_tester']
     for t in tester_params:
@@ -176,7 +170,6 @@ def get_testers(tester_params: dict):
 
 
 def get_analyzers(extractor_params: dict, tester_params: dict):
-
     extractors = get_extractors(extractor_params)
     testers = get_testers(tester_params)
 
@@ -229,3 +222,50 @@ def get_pipeline(conf):
         raise ValueError("Wrong tester name.")
 
     return get_analyzers(extractor_params, tester_params)
+
+
+def get_use_case_avg_attr_len(df, text_unit='char', pair_mode=False, left_prefix='left_', right_prefix='right_'):
+    if pair_mode:
+        left_df = df[[c for c in df.columns if c.startswith(left_prefix)]]
+        left_df.columns = [c.replace(left_prefix, "") for c in left_df.columns]
+        right_df = df[[c for c in df.columns if c.startswith(right_prefix)]]
+        right_df.columns = [c.replace(right_prefix, "") for c in right_df.columns]
+        df = pd.concat([left_df, right_df], axis=0)
+
+    # ignore non relevant attribute
+    drop_attrs = []
+    for attr in df.columns:
+        if 'id' in attr or 'label' in attr:
+            drop_attrs.append(attr)
+    df.drop(drop_attrs, axis=1, inplace=True)
+    if text_unit == 'char':
+        stats = df.applymap(lambda x: 0 if pd.isnull(x) else len(str(x))).mean(axis=0)
+    elif text_unit == 'word':
+        stats = df.applymap(lambda x: 0 if pd.isnull(x) else len(str(x).split())).mean(axis=0)
+    else:
+        raise ValueError("Wrong text unit.")
+
+    stats = pd.Series(stats.map(lambda x: int(x)).to_dict(OrderedDict))
+
+    return stats
+
+
+def get_benchmark_avg_attr_len(use_cases, conf, sampler_conf, pair_mode=False, text_unit='char'):
+    dfs = []
+    for use_case in use_cases:
+        uc_conf = conf.copy()
+        uc_conf['use_case'] = use_case
+        dataset = get_dataset(uc_conf)
+        uc_sampler_conf = sampler_conf.copy()
+        uc_sampler_conf['permute'] = uc_conf['permute']
+        sample = get_sample(dataset, uc_sampler_conf).get_complete_data()
+        dfs.append(sample)
+
+    avg_attr_len = {}
+    for uc_idx in range(len(use_cases)):
+        uc = use_cases[uc_idx]
+        df = dfs[uc_idx]
+        avg_attr_len[uc] = get_use_case_avg_attr_len(df, text_unit=text_unit, pair_mode=pair_mode,
+                                                     left_prefix=conf['left_prefix'], right_prefix=conf['right_prefix'])
+
+    return avg_attr_len

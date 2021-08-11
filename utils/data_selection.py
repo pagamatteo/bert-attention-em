@@ -88,6 +88,9 @@ class Sampler(object):
 
         match_data = self._get_data_by_label(1, size, match_seed)
         if size is not None:
+            # if no enough match data is available, limit also the non-match data in order to create a balanced sample
+            if len(match_data) < size:
+                size = len(match_data)
             non_match_data = self._get_data_by_label(0, size, non_match_seed)
         else:
             non_match_data = self._get_data_by_label(0, len(match_data), non_match_seed)

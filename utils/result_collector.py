@@ -105,6 +105,8 @@ class TestResultCollector(object):
 
 class BinaryClassificationResultsAggregator(object):
 
+    categories = ['all', 'all_pos', 'all_neg', 'all_pred_pos', 'all_pred_neg', 'tp', 'tn', 'fp', 'fn']
+
     def __init__(self, data_key: str, label_col: str = 'label', pred_col: str = 'pred',
                  target_categories: list = None):
 
@@ -119,13 +121,12 @@ class BinaryClassificationResultsAggregator(object):
         self.label_col = label_col
         self.pred_col = pred_col
         self.res_collector = TestResultCollector()
-        self.categories = ['all', 'all_pos', 'all_neg', 'all_pred_pos', 'all_pred_neg', 'tp', 'tn', 'fp', 'fn']
         if target_categories is not None:
             assert all(
                 [c in self.categories for c in target_categories]), "Wrong data format for param 'target_categories'."
             self.target_categories = target_categories
         else:
-            self.target_categories = self.categories
+            self.target_categories = BinaryClassificationResultsAggregator.categories
         self.agg_metrics = ['mean']
 
     def _check_data_format(self, data: dict):
@@ -160,7 +161,8 @@ class BinaryClassificationResultsAggregator(object):
             return group
 
         grouped_data = {}
-        for data in batch:
+        grouped_idxs = {}
+        for idx, data in enumerate(batch):
             if data is None:
                 continue
 
@@ -169,30 +171,46 @@ class BinaryClassificationResultsAggregator(object):
             values = data[self.data_key]
 
             grouped_data = _add_to_group(grouped_data, values, 'all')
+            grouped_idxs = _add_to_group(grouped_idxs, idx, 'all')
 
             if label == 1:
                 grouped_data = _add_to_group(grouped_data, values, 'all_pos')
+                grouped_idxs = _add_to_group(grouped_idxs, idx, 'all_pos')
 
                 if pred == 1:
                     grouped_data = _add_to_group(grouped_data, values, 'tp')
+                    grouped_idxs = _add_to_group(grouped_idxs, idx, 'tp')
                     grouped_data = _add_to_group(grouped_data, values, 'all_pred_pos')
+                    grouped_idxs = _add_to_group(grouped_idxs, idx, 'all_pred_pos')
                 else:
                     grouped_data = _add_to_group(grouped_data, values, 'fn')
+                    grouped_idxs = _add_to_group(grouped_idxs, idx, 'fn')
                     grouped_data = _add_to_group(grouped_data, values, 'all_pred_neg')
+                    grouped_idxs = _add_to_group(grouped_idxs, idx, 'all_pred_neg')
 
             else:
                 grouped_data = _add_to_group(grouped_data, values, 'all_neg')
+                grouped_idxs = _add_to_group(grouped_idxs, idx, 'all_neg')
 
                 if pred == 1:
                     grouped_data = _add_to_group(grouped_data, values, 'fp')
+                    grouped_idxs = _add_to_group(grouped_idxs, idx, 'fp')
                     grouped_data = _add_to_group(grouped_data, values, 'all_pred_pos')
+                    grouped_idxs = _add_to_group(grouped_idxs, idx, 'all_pred_pos')
                 else:
                     grouped_data = _add_to_group(grouped_data, values, 'tn')
+                    grouped_idxs = _add_to_group(grouped_idxs, idx, 'tn')
                     grouped_data = _add_to_group(grouped_data, values, 'all_pred_neg')
+                    grouped_idxs = _add_to_group(grouped_idxs, idx, 'all_pred_neg')
 
         for cat in grouped_data:
             if cat in self.target_categories:
                 self._add_data_by_category(grouped_data[cat], cat)
+
+        sel_grouped_data = {k: grouped_data[k] for k in grouped_data if k in self.target_categories}
+        sel_grouped_idxs = {k: grouped_idxs[k] for k in grouped_idxs if k in self.target_categories}
+
+        return sel_grouped_data, sel_grouped_idxs
 
     def get_results(self):
         out_data = self.res_collector.get_results().copy()
