@@ -107,7 +107,7 @@ class TopKGradientAnalyzer(object):
                 entities: EMDataset = None, pair_mode=False):
 
         aggregator = BinaryClassificationResultsAggregator('grad', target_categories=target_categories)
-        agg_grads_data, agg_grads_idxs = aggregator.add_batch_data(self.grads_data)
+        agg_grads_data, agg_grads_idxs, _, _ = aggregator.add_batch_data(self.grads_data)
 
         top_word_by_cat = {}
         new_agg_grads_data = {cat: [] for cat in agg_grads_data}

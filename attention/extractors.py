@@ -29,6 +29,26 @@ class AttentionExtractor(object):
     def __len__(self):
         return len(self.dataset)
 
+    @staticmethod
+    def check_attn_features(attn_features: tuple):
+        EMDataset.check_features(attn_features)
+        err_msg = "Wrong attention features format."
+        params = ['tokens', 'attns', 'preds']
+        f = attn_features[2]
+        assert all([p in f for p in params]), err_msg
+        assert isinstance(f['tokens'], list), err_msg
+        if f['attns'] is not None:
+            assert isinstance(f['attns'], (tuple, np.ndarray)), err_msg
+        assert isinstance(f['preds'], torch.Tensor), err_msg
+
+    @staticmethod
+    def check_batch_attn_features(batch_attn_features: list):
+        assert isinstance(batch_attn_features, list), "Wrong data type for parameter 'batch_attn_features'."
+        assert len(batch_attn_features) > 0, "Empty attention features."
+
+        for attn_features in batch_attn_features:
+            AttentionExtractor.check_attn_features(attn_features)
+
     def __getitem__(self, idx):
 
         left_entity, right_entity, features = self.dataset[idx]
@@ -53,12 +73,24 @@ class AttentionExtractor(object):
             preds = torch.argmax(logits, axis=1)
         attns = outputs['attentions']
 
-        param = {}
-        # remove useless features and preserve other features
-        useless_features = ['input_ids']
-        for f in features:
-            if f not in useless_features:
-                param[f] = features[f]
+        # # TODO: add residual
+        # attns_with_residual = []
+        # for layer_attns in attns:
+        #     # add residual connections by summing the attention weights on the main diagonal with 1
+        #     layer_attns_with_residual = layer_attns[0, :, :] + np.eye(layer_attns.shape[-1])[None, ...]
+        #     # normalize the attention weights along the column dimension (where softmax is applied)
+        #     layer_attns_with_residual /= layer_attns_with_residual.sum(axis=-1)[..., None]
+        #     attns_with_residual.append(layer_attns_with_residual[None, ...])
+        # attns = tuple(attns_with_residual)
+
+        # param = {}
+        # # remove useless features and preserve other features
+        # useless_features = ['input_ids']
+        # for f in features:
+        #     if f not in useless_features:
+        #         param[f] = features[f]
+
+        param = features.copy()
         param["tokens"] = self.tokenizer.convert_ids_to_tokens(input_ids[0])
         param["attns"] = attns
         param["preds"] = preds
@@ -88,6 +120,23 @@ class AttributeAttentionExtractor(AttentionExtractor):
         self.attrs = dataset.columns
         self.tokenization = dataset.tokenization
         self.invalid_attr_attn_maps = 0
+
+    @staticmethod
+    def check_attn_features(attn_features: tuple):
+        AttentionExtractor.check_attn_features(attn_features)
+        err_msg = "Wrong attribute attention features format."
+        params = ['text_units']
+        f = attn_features[2]
+        assert all([p in f for p in params]), err_msg
+        assert isinstance(f['text_units'], list), err_msg
+
+    @staticmethod
+    def check_batch_attn_features(batch_attn_features: list):
+        assert isinstance(batch_attn_features, list), "Wrong data type for parameter 'batch_attn_features'."
+        assert len(batch_attn_features) > 0, "Empty attention features."
+
+        for attn_features in batch_attn_features:
+            AttributeAttentionExtractor.check_attn_features(attn_features)
 
     def _get_head_attr_attn(self, head_attn: torch.Tensor, left_idxs: list,
                             right_idxs: list):

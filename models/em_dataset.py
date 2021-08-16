@@ -85,6 +85,26 @@ class EMDataset(Dataset):
 
         return params
 
+    @staticmethod
+    def check_features(features: tuple):
+        assert isinstance(features, tuple), "Wrong data type for parameter 'features'."
+        err_msg = "Wrong features format."
+        assert len(features) == 3, err_msg
+        l = features[0]
+        r = features[1]
+        f = features[2]
+        assert isinstance(l, pd.Series), err_msg
+        assert isinstance(r, pd.Series), err_msg
+        assert isinstance(f, dict), err_msg
+        params = ['input_ids', 'token_type_ids', 'attention_mask', 'sent1', 'sent2', 'labels']
+        assert all([p in f for p in params]), err_msg
+        assert isinstance(f['input_ids'], torch.Tensor), err_msg
+        assert isinstance(f['token_type_ids'], torch.Tensor), err_msg
+        assert isinstance(f['attention_mask'], torch.Tensor), err_msg
+        assert isinstance(f['sent1'], str), err_msg
+        assert isinstance(f['sent2'], str), err_msg
+        assert isinstance(f['labels'], torch.Tensor), err_msg
+
     def __len__(self):
         return len(self.data)
 

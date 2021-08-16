@@ -160,8 +160,18 @@ class BinaryClassificationResultsAggregator(object):
                 group[key].append(x)
             return group
 
+        def _multi_add_to_group(groups: list, list_x: list, key: str):
+
+            assert isinstance(groups, list)
+            assert isinstance(list_x, list)
+            assert len(groups) == len(list_x)
+
+            return [_add_to_group(groups[i], list_x[i], key) for i in range(len(groups))]
+
         grouped_data = {}
         grouped_idxs = {}
+        grouped_labels = {}
+        grouped_preds = {}
         for idx, data in enumerate(batch):
             if data is None:
                 continue
@@ -169,39 +179,63 @@ class BinaryClassificationResultsAggregator(object):
             label = data[self.label_col]
             pred = data[self.pred_col]
             values = data[self.data_key]
+            all_data = [values, idx, label, pred]
 
-            grouped_data = _add_to_group(grouped_data, values, 'all')
-            grouped_idxs = _add_to_group(grouped_idxs, idx, 'all')
+            if values is None:
+                continue
+
+            all_groups = [grouped_data, grouped_idxs, grouped_labels, grouped_preds]
+            grouped_data, grouped_idxs, grouped_labels, grouped_preds = _multi_add_to_group(all_groups, all_data, 'all')
 
             if label == 1:
-                grouped_data = _add_to_group(grouped_data, values, 'all_pos')
-                grouped_idxs = _add_to_group(grouped_idxs, idx, 'all_pos')
+                all_groups = [grouped_data, grouped_idxs, grouped_labels, grouped_preds]
+                grouped_data, grouped_idxs, grouped_labels, grouped_preds = _multi_add_to_group(all_groups, all_data,
+                                                                                                'all_pos')
 
                 if pred == 1:
-                    grouped_data = _add_to_group(grouped_data, values, 'tp')
-                    grouped_idxs = _add_to_group(grouped_idxs, idx, 'tp')
-                    grouped_data = _add_to_group(grouped_data, values, 'all_pred_pos')
-                    grouped_idxs = _add_to_group(grouped_idxs, idx, 'all_pred_pos')
+                    all_groups = [grouped_data, grouped_idxs, grouped_labels, grouped_preds]
+                    grouped_data, grouped_idxs, grouped_labels, grouped_preds = _multi_add_to_group(all_groups,
+                                                                                                    all_data,
+                                                                                                    'tp')
+                    all_groups = [grouped_data, grouped_idxs, grouped_labels, grouped_preds]
+                    grouped_data, grouped_idxs, grouped_labels, grouped_preds = _multi_add_to_group(all_groups,
+                                                                                                    all_data,
+                                                                                                    'all_pred_pos')
                 else:
-                    grouped_data = _add_to_group(grouped_data, values, 'fn')
-                    grouped_idxs = _add_to_group(grouped_idxs, idx, 'fn')
-                    grouped_data = _add_to_group(grouped_data, values, 'all_pred_neg')
-                    grouped_idxs = _add_to_group(grouped_idxs, idx, 'all_pred_neg')
+                    all_groups = [grouped_data, grouped_idxs, grouped_labels, grouped_preds]
+                    grouped_data, grouped_idxs, grouped_labels, grouped_preds = _multi_add_to_group(all_groups,
+                                                                                                    all_data,
+                                                                                                    'fn')
+                    all_groups = [grouped_data, grouped_idxs, grouped_labels, grouped_preds]
+                    grouped_data, grouped_idxs, grouped_labels, grouped_preds = _multi_add_to_group(all_groups,
+                                                                                                    all_data,
+                                                                                                    'all_pred_neg')
 
             else:
-                grouped_data = _add_to_group(grouped_data, values, 'all_neg')
-                grouped_idxs = _add_to_group(grouped_idxs, idx, 'all_neg')
+                all_groups = [grouped_data, grouped_idxs, grouped_labels, grouped_preds]
+                grouped_data, grouped_idxs, grouped_labels, grouped_preds = _multi_add_to_group(all_groups,
+                                                                                                all_data,
+                                                                                                'all_neg')
 
                 if pred == 1:
-                    grouped_data = _add_to_group(grouped_data, values, 'fp')
-                    grouped_idxs = _add_to_group(grouped_idxs, idx, 'fp')
-                    grouped_data = _add_to_group(grouped_data, values, 'all_pred_pos')
-                    grouped_idxs = _add_to_group(grouped_idxs, idx, 'all_pred_pos')
+                    all_groups = [grouped_data, grouped_idxs, grouped_labels, grouped_preds]
+                    grouped_data, grouped_idxs, grouped_labels, grouped_preds = _multi_add_to_group(all_groups,
+                                                                                                    all_data,
+                                                                                                    'fp')
+                    all_groups = [grouped_data, grouped_idxs, grouped_labels, grouped_preds]
+                    grouped_data, grouped_idxs, grouped_labels, grouped_preds = _multi_add_to_group(all_groups,
+                                                                                                    all_data,
+                                                                                                    'all_pred_pos')
+
                 else:
-                    grouped_data = _add_to_group(grouped_data, values, 'tn')
-                    grouped_idxs = _add_to_group(grouped_idxs, idx, 'tn')
-                    grouped_data = _add_to_group(grouped_data, values, 'all_pred_neg')
-                    grouped_idxs = _add_to_group(grouped_idxs, idx, 'all_pred_neg')
+                    all_groups = [grouped_data, grouped_idxs, grouped_labels, grouped_preds]
+                    grouped_data, grouped_idxs, grouped_labels, grouped_preds = _multi_add_to_group(all_groups,
+                                                                                                    all_data,
+                                                                                                    'tn')
+                    all_groups = [grouped_data, grouped_idxs, grouped_labels, grouped_preds]
+                    grouped_data, grouped_idxs, grouped_labels, grouped_preds = _multi_add_to_group(all_groups,
+                                                                                                    all_data,
+                                                                                                    'all_pred_neg')
 
         for cat in grouped_data:
             if cat in self.target_categories:
@@ -209,8 +243,10 @@ class BinaryClassificationResultsAggregator(object):
 
         sel_grouped_data = {k: grouped_data[k] for k in grouped_data if k in self.target_categories}
         sel_grouped_idxs = {k: grouped_idxs[k] for k in grouped_idxs if k in self.target_categories}
+        sel_grouped_labels = {k: grouped_labels[k] for k in grouped_labels if k in self.target_categories}
+        sel_grouped_preds = {k: grouped_preds[k] for k in grouped_preds if k in self.target_categories}
 
-        return sel_grouped_data, sel_grouped_idxs
+        return sel_grouped_data, sel_grouped_idxs, sel_grouped_labels, sel_grouped_preds
 
     def get_results(self):
         out_data = self.res_collector.get_results().copy()
