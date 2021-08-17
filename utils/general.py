@@ -8,7 +8,7 @@ from utils.data_collector import DataCollector
 from models.em_dataset import EMDataset
 from utils.data_selection import Sampler
 from fine_tuning.advanced_fine_tuning import MatcherTransformer
-from attention.extractors import AttributeAttentionExtractor
+from attention.extractors import AttributeAttentionExtractor, WordAttentionExtractor
 from attention.testers import GenericAttributeAttentionTest
 from attention.analyzers import AttentionMapAnalyzer
 
@@ -113,7 +113,7 @@ def get_model(model_name: str, fine_tune: str = None, model_path: str = None):
 
 def get_extractors(extractor_params: dict):
     assert isinstance(extractor_params, dict), "Wrong data type for parameter 'extractor_params'."
-    available_extractors = ['attr_extractor']
+    available_extractors = ['attr_extractor', 'word_extractor']
     for ex in extractor_params:
         assert ex in available_extractors, f"Wrong value for parameter 'extractor_params' ({available_extractors})."
         assert isinstance(extractor_params[ex], dict), "Wrong value for parameter 'extractor_params'."
@@ -121,16 +121,20 @@ def get_extractors(extractor_params: dict):
     extractors = []
     for extractor_name in extractor_params:
 
-        if extractor_name == 'attr_extractor':
+        if extractor_name in ['attr_extractor', 'word_extractor']:
 
             extractor_param = extractor_params[extractor_name]
-            params = ['dataset', 'model']
+            params = ['dataset', 'model', 'special_tokens']
             assert all([p in params for p in extractor_param]), "Wrong value for attr_extractor."
 
             dataset = extractor_param['dataset']
             model = extractor_param['model']
+            special_tokens = extractor_param['special_tokens']
 
-            attn_extractor = AttributeAttentionExtractor(dataset, model)
+            if extractor_name in 'attr_extractor':
+                attn_extractor = AttributeAttentionExtractor(dataset, model, special_tokens=special_tokens)
+            else:
+                attn_extractor = WordAttentionExtractor(dataset, model, special_tokens=special_tokens)
 
         else:
             raise NotImplementedError()

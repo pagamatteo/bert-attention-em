@@ -1,4 +1,5 @@
 from utils.general import get_dataset, get_model, get_sample, get_extractors, get_testers, get_analyzers
+from attention.extractors import AttributeAttentionExtractor
 import os
 from pathlib import Path
 
@@ -77,7 +78,7 @@ def test_sampler(conf: dict, sampler_conf: dict):
     print("Num. sentences: {}".format(len(last_row[2]['token_type_ids'].unique())))
 
 
-def test_attn_extractor(conf: dict, sampler_conf: dict, fine_tune: str, extractor_names: list):
+def test_attn_extractor(conf: dict, sampler_conf: dict, fine_tune: str, extractor_names: dict):
 
     dataset = get_dataset(conf)
     use_case = conf['use_case']
@@ -97,11 +98,12 @@ def test_attn_extractor(conf: dict, sampler_conf: dict, fine_tune: str, extracto
     extractor_params = {}
     for extractor_name in extractor_names:
 
-        if extractor_name == 'attr_extractor':
+        if extractor_name in ['attr_extractor', 'word_extractor']:
             extractor_param = {
                 'dataset': sample,
                 'model': model,
             }
+            extractor_param.update(extractor_names[extractor_name])
             extractor_params[extractor_name] = extractor_param
         else:
             raise ValueError("Wrong value for parameter 'extractor_names'.")
@@ -111,11 +113,17 @@ def test_attn_extractor(conf: dict, sampler_conf: dict, fine_tune: str, extracto
     for attn_extractor in attn_extractors:
         print(type(attn_extractor))
         results = attn_extractor.extract_all()
+        if isinstance(attn_extractor, AttributeAttentionExtractor):
+            invalid_attn_maps = attn_extractor.get_num_invalid_attr_attn_maps()
 
-        for res in results:
+        for idx, res in enumerate(results):
+            print(f"Record#{idx}")
             left = res[0]
             right = res[1]
             features = res[2]
+            if features['attns'] is None:
+                print("Skip.")
+                continue
             print(left)
             print(right)
             print(features.keys())
@@ -124,8 +132,11 @@ def test_attn_extractor(conf: dict, sampler_conf: dict, fine_tune: str, extracto
             print(features['attns'][0].shape[1:])
             print("-" * 10)
 
+        if isinstance(attn_extractor, AttributeAttentionExtractor):
+            print(f"Invalid attention maps: {invalid_attn_maps}/{len(results)}={(invalid_attn_maps/len(results))*100}")
 
-def test_attn_tester(conf: dict, sampler_conf: dict, fine_tune: str, extractor_names: list, tester_names: list):
+
+def test_attn_tester(conf: dict, sampler_conf: dict, fine_tune: str, extractor_names: dict, tester_names: list):
 
     dataset = get_dataset(conf)
     use_case = conf['use_case']
@@ -150,6 +161,7 @@ def test_attn_tester(conf: dict, sampler_conf: dict, fine_tune: str, extractor_n
                 'dataset': sample,
                 'model': model,
             }
+            extractor_param.update(extractor_names[extractor_name])
             extractor_params[extractor_name] = extractor_param
         else:
             raise ValueError("Wrong extractor name.")
@@ -186,7 +198,7 @@ def test_attn_tester(conf: dict, sampler_conf: dict, fine_tune: str, extractor_n
                 print(result.get_results().keys())
                 
                 
-def test_attn_analyzer(conf: dict, sampler_conf: dict, fine_tune: str, extractor_names: list, tester_names: list):
+def test_attn_analyzer(conf: dict, sampler_conf: dict, fine_tune: str, extractor_names: dict, tester_names: list):
 
     dataset = get_dataset(conf)
     use_case = conf['use_case']
@@ -211,6 +223,7 @@ def test_attn_analyzer(conf: dict, sampler_conf: dict, fine_tune: str, extractor
                 'dataset': sample,
                 'model': model,
             }
+            extractor_param.update(extractor_names[extractor_name])
             extractor_params[extractor_name] = extractor_param
         else:
             raise ValueError("Wrong extractor name.")
@@ -237,13 +250,17 @@ def test_attn_analyzer(conf: dict, sampler_conf: dict, fine_tune: str, extractor
 
 
 if __name__ == '__main__':
+    use_cases = ["Structured_Fodors-Zagats", "Structured_DBLP-GoogleScholar", "Structured_DBLP-ACM",
+                 "Structured_Amazon-Google", "Structured_Walmart-Amazon", "Structured_Beer",
+                 "Structured_iTunes-Amazon", "Textual_Abt-Buy", "Dirty_iTunes-Amazon", "Dirty_DBLP-ACM",
+                 "Dirty_DBLP-GoogleScholar", "Dirty_Walmart-Amazon"]
 
     # [BEGIN] INPUT PARAMS ---------------------------------------------------------------------------------------------
     conf = {
-        'use_case': "Structured_Amazon-Google",
+        'use_case': "Dirty_iTunes-Amazon",
         'data_type': 'train',                       # 'train', 'test', 'valid'
         'model_name': 'bert-base-uncased',
-        'tok': 'attr_pair',                         # 'sent_pair', 'attr', 'attr_pair'
+        'tok': 'sent_pair',                         # 'sent_pair', 'attr', 'attr_pair'
         'label_col': 'label',
         'left_prefix': 'left_',
         'right_prefix': 'right_',
@@ -253,25 +270,26 @@ if __name__ == '__main__':
     }
 
     sampler_conf = {
-        'size': 2,
+        'size': 100,
         'target_class': 'both',                     # 'both', 0, 1
         'seeds': [42, 42],                          # [42 -> class 0, 42 -> class 1]
     }
 
-    fine_tune = 'advanced'  # None, 'simple', 'advanced'
+    fine_tune = 'simple'  # None, 'simple', 'advanced'
     # [END] INPUT PARAMS -----------------------------------------------------------------------------------------------
 
     # TEST 1
-    test_dataset(conf)
+    # test_dataset(conf)
 
     # TEST 2
     # test_sampler(conf, sampler_conf)
 
     # TEST 3
-    # test_attn_extractor(conf, sampler_conf, fine_tune, ['attr_extractor'])
+    # test_attn_extractor(conf, sampler_conf, fine_tune, {'attr_extractor': {'special_tokens': True}})
+    test_attn_extractor(conf, sampler_conf, fine_tune, {'word_extractor': {'special_tokens': True}})
 
     # TEST 4
-    # test_attn_tester(conf, sampler_conf, fine_tune, ['attr_extractor'], ['attr_tester'])
+    # test_attn_tester(conf, sampler_conf, fine_tune, {'attr_extractor': {'special_tokens': False}}, ['attr_tester'])
     
     # TEST 5
-    # test_attn_analyzer(conf, sampler_conf, fine_tune, ['attr_extractor'], ['attr_tester'])
+    # test_attn_analyzer(conf, sampler_conf, fine_tune, {'attr_extractor': {'special_tokens': False}}, ['attr_tester'])
