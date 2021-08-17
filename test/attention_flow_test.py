@@ -5,6 +5,7 @@ from pathlib import Path
 from attention.attention_flow import AttentionGraphExtractor, AttentionGraphUtils, AggregateAttributeAttentionGraph
 import pickle
 from multiprocessing import Process
+import matplotlib.pyplot as plt
 
 
 PROJECT_DIR = Path(__file__).parent.parent
@@ -54,22 +55,176 @@ def load_saved_attn_graph_data(use_case, conf, sampler_conf, fine_tune, attn_flo
     return uc_attn_graph
 
 
-def plot_attn_graph(att_mat, text_units, plot_attn_graph, plot_attn_flow, plot_title):
+# def plot_attn_graph(att_mat, text_units, plot_attn_graph, plot_attn_flow, plot_title):
+#     adj_mat, labels_to_index = AttentionGraphUtils.get_adjmat(mat=att_mat,
+#                                                               input_text_units=text_units)
+#
+#     if plot_attn_graph:
+#         G = AttentionGraphUtils.create_attention_graph(adj_mat)
+#         AttentionGraphUtils.plot_attention_graph(G, adj_mat, labels_to_index,
+#                                                  n_layers=att_mat.shape[0],
+#                                                  length=att_mat.shape[-1], title=plot_title)
+#
+#     if plot_attn_flow:
+#         flow_G = AttentionGraphUtils.create_attention_graph(flow_res)
+#         AttentionGraphUtils.plot_attention_graph(flow_G, flow_res, labels_to_index,
+#                                                  n_layers=att_mat.shape[0],
+#                                                  length=att_mat.shape[-1],
+#                                                  title=plot_title.replace('graph', 'flow'))
+
+def plot_attention_graph(att_mat, text_units, flow_res, plot_attn_graph, plot_attn_flow, top_selection_method,
+                         plot_title, ax=None):
     adj_mat, labels_to_index = AttentionGraphUtils.get_adjmat(mat=att_mat,
                                                               input_text_units=text_units)
 
     if plot_attn_graph:
-        G = AttentionGraphUtils.create_attention_graph(adj_mat)
-        AttentionGraphUtils.plot_attention_graph(G, adj_mat, labels_to_index,
-                                                 n_layers=att_mat.shape[0],
-                                                 length=att_mat.shape[-1], title=plot_title)
+        target_res = adj_mat
 
     if plot_attn_flow:
-        flow_G = AttentionGraphUtils.create_attention_graph(flow_res)
-        AttentionGraphUtils.plot_attention_graph(flow_G, flow_res, labels_to_index,
-                                                 n_layers=att_mat.shape[0],
-                                                 length=att_mat.shape[-1],
-                                                 title=plot_title.replace('graph', 'flow'))
+        target_res = flow_res
+        plot_title = plot_title.replace("graph", "flow")
+
+    G = AttentionGraphUtils.create_attention_graph(target_res)
+
+    if ax is None:
+        plt.figure(1, figsize=(20, 12))
+
+    AttentionGraphUtils.plot_attention_graph(G, target_res, labels_to_index,
+                                             n_layers=att_mat.shape[0],
+                                             length=att_mat.shape[-1], plot_top_scores=top_selection_method, ax=ax)
+
+    if ax is None:
+        plt.title(plot_title)
+        plt.show()
+    else:
+        ax.set_title(plot_title)
+
+
+def plot_benchmark(use_cases, conf, sampler_conf, fine_tune, attn_flow_param, plot_params):
+
+    assert isinstance(use_cases, list)
+    assert len(use_cases) > 0
+    assert plot_params['group_by_cat'] is True
+    assert plot_params['agg'] is True
+    assert plot_params['target_categories'] is not None
+    assert isinstance(plot_params['target_categories'], list)
+    assert len(plot_params['target_categories']) > 0
+
+    # load saved results and aggregate them
+    res = {}
+    for use_case in use_cases:
+        uc_attn_graph = load_saved_attn_graph_data(use_case, conf, sampler_conf, fine_tune, attn_flow_param)
+        aggregator = AggregateAttributeAttentionGraph(uc_attn_graph, target_categories=plot_params['target_categories'])
+        _, uc_agg_attn_graph = aggregator.aggregate('mean')
+
+        for cat in uc_agg_attn_graph:
+            if cat not in res:
+                res[cat] = {use_case: uc_agg_attn_graph[cat]}
+            else:
+                res[cat][use_case] = uc_agg_attn_graph[cat]
+
+    if plot_params['plot_attn_graph'] is True and plot_params['plot_attn_flow'] is True:
+        items_to_plot = [(True, False), (False, True)]
+    else:
+        items_to_plot = [(plot_params['plot_attn_graph'], plot_params['plot_attn_flow'])]
+
+    for item_to_plot in items_to_plot:
+        for cat in res:
+            cat_res = res[cat]
+
+            nrows = 6
+            ncols = 2
+            fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(18, 18))
+            axes = axes.flat
+            suptitle = f'average {cat}'
+            if item_to_plot[0] is True:
+                suptitle += ' attention graph'
+            else:
+                suptitle += ' attention flow'
+            fig.suptitle(suptitle)
+
+            for idx, use_case in enumerate(cat_res):
+                uc_cat_res = cat_res[use_case]
+                ax = axes[idx]
+
+                att_mat = uc_cat_res['attn_vals']
+                text_units = uc_cat_res['text_units']
+                flow_res = uc_cat_res['flow_vals']
+
+                plot_attention_graph(att_mat, text_units, flow_res, item_to_plot[0], item_to_plot[1],
+                                     plot_params['top_selection_method'], plot_title=use_case, ax=ax)
+                ax.axis('off')
+
+            plt.tight_layout()
+            plt.subplots_adjust(wspace=-0.08, hspace=0.05)
+            plt.show()
+
+
+def plot_use_cases_sequentially(use_cases, conf, sampler_conf, fine_tune, attn_flow_param, plot_params):
+
+    # loop over the use cases
+    for use_case in use_cases:
+
+        # retrieved saved results
+        uc_attn_graph = load_saved_attn_graph_data(use_case, conf, sampler_conf, fine_tune, attn_flow_param)
+
+        if plot_params['group_by_cat']:
+            # group data and optionally aggregate it
+            assert plot_params['target_categories'] is not None
+            assert isinstance(plot_params['target_categories'], list)
+            assert len(plot_params['target_categories']) > 0
+            aggregator = AggregateAttributeAttentionGraph(uc_attn_graph,
+                                                          target_categories=plot_params['target_categories'])
+            uc_grouped_attn_graph, uc_agg_attn_graph = aggregator.aggregate('mean')
+
+            # plot aggregated results
+            if plot_params['agg']:
+
+                # loop over the data categories
+                for cat in uc_agg_attn_graph:
+                    att_mat = uc_agg_attn_graph[cat]['attn_vals']
+                    text_units = uc_agg_attn_graph[cat]['text_units']
+                    flow_res = uc_agg_attn_graph[cat]['flow_vals']
+                    plot_title = f'{use_case} average {cat} attention graph'
+
+                    plot_attention_graph(att_mat, text_units, flow_res, plot_params['plot_attn_graph'],
+                                         plot_params['plot_attn_flow'], plot_params['top_selection_method'], plot_title)
+
+            else:       # plot raw results by grouping them by data category
+                for cat in uc_grouped_attn_graph:
+                    attn_graph_by_cat = uc_grouped_attn_graph[cat]
+                    for i in range(len(attn_graph_by_cat['attn'])):
+                        att_mat = attn_graph_by_cat['attn'][i]
+                        text_units = attn_graph_by_cat['text_units']
+                        flow_res = attn_graph_by_cat['flow'][i]
+                        label = attn_graph_by_cat['labels'][i]
+                        pred = attn_graph_by_cat['preds'][i]
+                        idx = attn_graph_by_cat['idxs'][i]
+                        plot_title = f'{use_case} {cat} record#{idx} (label: {label}, pred: {pred}) attention graph'
+
+                        plot_attention_graph(att_mat, text_units, flow_res, plot_params['plot_attn_graph'],
+                                             plot_params['plot_attn_flow'], plot_params['top_selection_method'],
+                                             plot_title)
+
+        else:
+            for idx, (l, r, f) in enumerate(uc_attn_graph):
+                att_mat = f['graph_attn']['attns']
+                text_units = f['graph_attn']['text_units']
+                flow_res = f['graph_attn']['flow']
+                label = f['labels'].item()
+                pred = f['preds'].item()
+                plot_title = f'{use_case} record#{idx} (label: {label}, pred: {pred}) attention graph'
+
+                if att_mat is None or flow_res is None:
+                    print(f"Skip record {idx}.")
+                    continue
+
+                if plot_params['target_idx'] is not None:
+                    if idx != plot_params['target_idx']:
+                        continue
+
+                plot_attention_graph(att_mat, text_units, flow_res, plot_params['plot_attn_graph'],
+                                     plot_params['plot_attn_flow'], plot_params['top_selection_method'], plot_title)
 
 
 if __name__ == '__main__':
@@ -83,7 +238,7 @@ if __name__ == '__main__':
     conf = {
         'data_type': 'train',  # 'train', 'test', 'valid'
         'model_name': 'bert-base-uncased',
-        'tok': 'sent_pair',  # 'sent_pair', 'attr', 'attr_pair'
+        'tok': 'attr_pair',  # 'sent_pair', 'attr', 'attr_pair'
         'label_col': 'label',
         'left_prefix': 'left_',
         'right_prefix': 'right_',
@@ -108,9 +263,11 @@ if __name__ == '__main__':
     experiment = 'compute_attn_flow'
     plot_params = {
         'plot_attn_graph': True,
-        'plot_attn_flow': True,
-        'group_by_cat': False,
-        'agg': False,
+        'plot_attn_flow': False,
+        'group_by_cat': True,
+        'agg': True,
+        'top_selection_method': 'percentile',
+        'target_categories': ['all', 'all_pos', 'all_neg'],
         'target_idx': None,
     }
 
@@ -139,55 +296,7 @@ if __name__ == '__main__':
 
     elif experiment == 'plot_attn_flow':
 
-        for use_case in use_cases:
-            uc_attn_graph = load_saved_attn_graph_data(use_case, conf, sampler_conf, fine_tune, attn_flow_param)
+        assert plot_params['plot_attn_graph'] or plot_params['plot_attn_flow']
 
-            if plot_params['group_by_cat']:
-                aggregator = AggregateAttributeAttentionGraph(uc_attn_graph,
-                                                              target_categories=['all', 'all_pos', 'all_neg'])
-                uc_grouped_attn_graph, uc_agg_attn_graph = aggregator.aggregate('mean')
-
-                if plot_params['agg']:
-                    for cat in uc_agg_attn_graph:
-                        att_mat = uc_agg_attn_graph[cat]['attn_vals']
-                        text_units = uc_agg_attn_graph[cat]['text_units']
-                        flow_res = uc_agg_attn_graph[cat]['flow_vals']
-                        plot_title = f'{use_case} average {cat} attention graph'
-
-                        plot_attn_graph(att_mat, text_units, plot_params['plot_attn_graph'],
-                                        plot_params['plot_attn_flow'], plot_title)
-
-                else:
-                    for cat in uc_grouped_attn_graph:
-                        attn_graph_by_cat = uc_grouped_attn_graph[cat]
-                        for i in range(len(attn_graph_by_cat['attn'])):
-                            att_mat = attn_graph_by_cat['attn'][i]
-                            text_units = attn_graph_by_cat['text_units']
-                            flow_res = attn_graph_by_cat['flow'][i]
-                            label = attn_graph_by_cat['labels'][i]
-                            pred = attn_graph_by_cat['preds'][i]
-                            idx = attn_graph_by_cat['idxs'][i]
-                            plot_title = f'{use_case} {cat} record#{idx} (label: {label}, pred: {pred}) attention graph'
-
-                            plot_attn_graph(att_mat, text_units, plot_params['plot_attn_graph'],
-                                            plot_params['plot_attn_flow'], plot_title)
-
-            else:
-                for idx, (l, r, f) in enumerate(uc_attn_graph):
-                    att_mat = f['graph_attn']['attns']
-                    text_units = f['graph_attn']['text_units']
-                    flow_res = f['graph_attn']['flow']
-                    label = f['labels'].item()
-                    pred = f['preds'].item()
-                    plot_title = f'{use_case} record#{idx} (label: {label}, pred: {pred}) attention graph'
-
-                    if att_mat is None or flow_res is None:
-                        print(f"Skip record {idx}.")
-                        continue
-
-                    if plot_params['target_idx'] is not None:
-                        if idx != plot_params['target_idx']:
-                            continue
-
-                    plot_attn_graph(att_mat, text_units, plot_params['plot_attn_graph'],
-                                    plot_params['plot_attn_flow'], plot_title)
+        plot_benchmark(use_cases, conf, sampler_conf, fine_tune, attn_flow_param, plot_params)
+        # plot_use_cases_sequentially(use_cases, conf, sampler_conf, fine_tune, attn_flow_param, plot_params)

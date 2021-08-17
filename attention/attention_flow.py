@@ -62,14 +62,19 @@ class AttentionGraphUtils(object):
         return flow_values
 
     @staticmethod
-    def plot_attention_graph(G, adjmat, labels_to_index, n_layers, length, title=None):
+    def plot_attention_graph(G, adjmat, labels_to_index, n_layers, length, plot_top_scores=None, ax=None):
+
+        top_score_selection_meths = ['percentile']
+        if plot_top_scores is not None:
+            assert plot_top_scores in top_score_selection_meths
+
         A = adjmat
         pos = {}
         label_pos = {}
         for i in np.arange(n_layers + 1):
             for k_f in np.arange(length):
                 pos[i * length + k_f] = ((i + 0.4) * 2, length - k_f)
-                label_pos[i * length + k_f] = (i * 2, length - k_f)
+                label_pos[i * length + k_f] = (i * 2 - 1, length - k_f)
 
         index_to_labels = {}
         for key in labels_to_index:
@@ -77,39 +82,43 @@ class AttentionGraphUtils(object):
             if labels_to_index[key] >= length:
                 index_to_labels[labels_to_index[key]] = ''
 
-        plt.figure(1, figsize=(20, 12))
+        if ax is None:
+            node_size = 50
+            label_font_size = 18
+        else:
+            node_size = 20
+            label_font_size = 12
 
-        nx.draw_networkx_nodes(G, pos, node_color='green', node_size=50)  # , labels=index_to_labels, node_size=50)
-        nx.draw_networkx_labels(G, pos=label_pos, labels=index_to_labels, font_size=18)
+        nx.draw_networkx_nodes(G, pos, node_color='green', node_size=node_size, ax=ax)  # , labels=index_to_labels, node_size=50)
+        nx.draw_networkx_labels(G, pos=label_pos, labels=index_to_labels, font_size=label_font_size, ax=ax,
+                                horizontalalignment='left')
 
         max_attentions = {}
-        for i in np.arange(1, n_layers + 1):
-            attn_map = A[i * length: (i + 1) * length, (i - 1) * length: i * length]
-            thr = np.quantile(attn_map, 0.8)
-            max_flat_idxs = np.where(attn_map >= thr)
-            max_idxs = list(zip(max_flat_idxs[0] + i * length, max_flat_idxs[1] + (i - 1) * length))
-            for max_idx in max_idxs:
-                max_attentions[max_idx] = A[max_idx[0], max_idx[1]]
+        if plot_top_scores is not None:
+            if plot_top_scores == 'percentile':
+                for i in np.arange(1, n_layers + 1):
+                    attn_map = A[i * length: (i + 1) * length, (i - 1) * length: i * length]
+                    thr = np.quantile(attn_map, 0.8)
+                    max_flat_idxs = np.where(attn_map >= thr)
+                    max_idxs = list(zip(max_flat_idxs[0] + i * length, max_flat_idxs[1] + (i - 1) * length))
+                    for max_idx in max_idxs:
+                        max_attentions[max_idx] = A[max_idx[0], max_idx[1]]
+            else:
+                raise NotImplementedError()
 
-        all_weights = []
-        all_edges = []
-        top_weights = []
-        top_edges = []
+        weights = []
+        edges = []
         # 4 a. Iterate through the graph nodes to gather all the weights
         for (node1, node2, data) in G.edges(data=True):
-            if (node1, node2) in max_attentions:
-                top_weights.append(data['weight'])
-                top_edges.append((node1, node2))
+            if len(max_attentions) > 0:
+                if (node1, node2) in max_attentions:
+                    weights.append(data['weight'])
+                    edges.append((node1, node2))
             else:
-                all_weights.append(data['weight'])  # we'll use this when determining edge thickness
-                all_edges.append((node1, node2))
+                weights.append(data['weight'])  # we'll use this when determining edge thickness
+                edges.append((node1, node2))
 
-        # nx.draw_networkx_edges(G, pos, edgelist=all_edges, width=all_weights, edge_color='darkblue')
-        nx.draw_networkx_edges(G, pos, edgelist=top_edges, width=top_weights, edge_color='darkblue')
-
-        if title:
-            plt.title(title)
-        plt.show()
+        nx.draw_networkx_edges(G, pos, edgelist=edges, width=weights, edge_color='darkblue', ax=ax)
 
 
 class AttentionGraphExtractor(object):
