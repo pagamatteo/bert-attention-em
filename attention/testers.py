@@ -4,8 +4,6 @@ import os
 import matplotlib.pyplot as plt
 import seaborn as sns
 from utils.result_collector import TestResultCollector
-from utils.plot import plot_left_to_right_heatmap
-from experiments.confs import ConfCreator
 
 
 class GenericAttributeAttentionTest(object):

@@ -17,13 +17,14 @@ class AttentionExtractor(object):
     - all the other parameters provided in the record features
     """
 
-    def __init__(self, dataset: EMDataset, model):
+    def __init__(self, dataset: EMDataset, model, special_tokens: bool = True):
 
         assert isinstance(dataset, EMDataset), "Wrong data type for parameter 'dataset'."
 
         self.dataset = dataset
         self.tokenizer = dataset.tokenizer
         self.model = model
+        self.special_tokens = special_tokens
 
         self.model.eval()
 
@@ -97,6 +98,13 @@ class AttentionExtractor(object):
         param["preds"] = preds
 
         return left_entity, right_entity, param
+
+    def extract_all(self):
+        attn_features = []
+        for features in tqdm(self):
+            attn_features.append(features)
+
+        return attn_features
 
 
 class WordAttentionExtractor(AttentionExtractor):

@@ -1,84 +1,27 @@
-from utils.general import get_dataset, get_model, get_sample, get_extractors, get_testers, get_analyzers
-from attention.extractors import AttributeAttentionExtractor
+from utils.general import get_dataset, get_model, get_sample, get_extractors
 import os
 from pathlib import Path
+from multiprocessing import Process
+import pickle
+from attention.extractors import AttributeAttentionExtractor, WordAttentionExtractor, AttentionExtractor
+from attention.analyzers import AttrToClsAttentionAnalyzer, EntityToEntityAttentionAnalyzer
+from utils.test_utils import ConfCreator
+import pandas as pd
 
 
 PROJECT_DIR = Path(__file__).parent.parent
 MODELS_DIR = os.path.join(PROJECT_DIR, 'results', 'models')
-RESULTS_DIR = os.path.join(PROJECT_DIR, 'results', 'analysis')
+RESULTS_DIR = os.path.join(PROJECT_DIR, 'results', 'attention')
 
 
-def test_dataset(conf: dict):
+def run_attn_extractor(conf: dict, sampler_conf: dict, fine_tune: str, attn_params: dict, models_dir: str,
+                       res_dir: str):
 
-    dataset = get_dataset(conf)
-    verbose = conf['verbose']
-
-    row = dataset[0]
-    left_entity = None
-    right_entity = None
-    features = None
-
-    if verbose:
-        left_entity = row[0]
-        right_entity = row[1]
-        features = row[2]
-    else:
-        features = row
-
-    assert features is not None
-
-    if left_entity is not None:
-        print(left_entity)
-
-    if right_entity is not None:
-        print(right_entity)
-
-    row_text = dataset.tokenizer.convert_ids_to_tokens(features['input_ids'])
-    row_label = features['labels']
-    print(row_text)
-    print(row_label)
-    print("Num. sentences: {}".format(len(features['token_type_ids'].unique())))
-
-
-def test_sampler(conf: dict, sampler_conf: dict):
-
-    dataset = get_dataset(conf)
-
-    complete_sampler_conf = sampler_conf.copy()
-    complete_sampler_conf['permute'] = conf['permute']
-    sample = get_sample(dataset, complete_sampler_conf)
-
-    print("Num. samples: {}".format(len(sample)))
-
-    first_row = sample[0]
-    first_left_entity = first_row[0]
-    first_right_entity = first_row[1]
-    first_input_ids = first_row[2]['input_ids']
-    first_row_text = dataset.tokenizer.convert_ids_to_tokens(first_input_ids)
-    first_label = first_row[2]['labels']
-    print("\nFIRST ROW")
-    print(first_left_entity)
-    print(first_right_entity)
-    print(first_row_text)
-    print(first_label)
-    print("Num. sentences: {}".format(len(first_row[2]['token_type_ids'].unique())))
-
-    last_row = sample[-1]
-    last_left_entity = last_row[0]
-    last_right_entity = last_row[1]
-    last_input_ids = last_row[2]['input_ids']
-    last_row_text = dataset.tokenizer.convert_ids_to_tokens(last_input_ids)
-    last_label = last_row[2]['labels']
-    print("\nLAST ROW")
-    print(last_left_entity)
-    print(last_right_entity)
-    print(last_row_text)
-    print(last_label)
-    print("Num. sentences: {}".format(len(last_row[2]['token_type_ids'].unique())))
-
-
-def test_attn_extractor(conf: dict, sampler_conf: dict, fine_tune: str, extractor_names: dict):
+    assert isinstance(attn_params, dict)
+    assert 'attn_extractor' in attn_params
+    assert 'attn_extr_params' in attn_params
+    assert attn_params['attn_extractor'] in ['attr_extractor', 'word_extractor', 'token_extractor']
+    assert isinstance(attn_params['attn_extr_params'], dict)
 
     dataset = get_dataset(conf)
     use_case = conf['use_case']
@@ -86,7 +29,7 @@ def test_attn_extractor(conf: dict, sampler_conf: dict, fine_tune: str, extracto
     model_name = conf['model_name']
 
     if fine_tune is not None:
-        model_path = os.path.join(MODELS_DIR, fine_tune, f"{use_case}_{tok}_tuned")
+        model_path = os.path.join(models_dir, fine_tune, f"{use_case}_{tok}_tuned")
     else:
         model_path = None
     model = get_model(model_name, fine_tune, model_path)
@@ -95,158 +38,42 @@ def test_attn_extractor(conf: dict, sampler_conf: dict, fine_tune: str, extracto
     complete_sampler_conf['permute'] = conf['permute']
     sample = get_sample(dataset, complete_sampler_conf)
 
-    extractor_params = {}
-    for extractor_name in extractor_names:
+    extractor_name = attn_params['attn_extractor']
+    extractor_params = {
+        'dataset': sample,
+        'model': model,
+    }
+    extractor_params.update(attn_params['attn_extr_params'])
+    attn_extractors = get_extractors({extractor_name: extractor_params})
+    attn_extractor = attn_extractors[0]
 
-        if extractor_name in ['attr_extractor', 'word_extractor']:
-            extractor_param = {
-                'dataset': sample,
-                'model': model,
-            }
-            extractor_param.update(extractor_names[extractor_name])
-            extractor_params[extractor_name] = extractor_param
-        else:
-            raise ValueError("Wrong value for parameter 'extractor_names'.")
+    results = attn_extractor.extract_all()
 
-    attn_extractors = get_extractors(extractor_params)
-
-    for attn_extractor in attn_extractors:
-        print(type(attn_extractor))
-        results = attn_extractor.extract_all()
-        if isinstance(attn_extractor, AttributeAttentionExtractor):
-            invalid_attn_maps = attn_extractor.get_num_invalid_attr_attn_maps()
-
-        for idx, res in enumerate(results):
-            print(f"Record#{idx}")
-            left = res[0]
-            right = res[1]
-            features = res[2]
-            if features['attns'] is None:
-                print("Skip.")
-                continue
-            print(left)
-            print(right)
-            print(features.keys())
-            print(features['tokens'])
-            print(features['text_units'])
-            print(features['attns'][0].shape[1:])
-            print("-" * 10)
-
-        if isinstance(attn_extractor, AttributeAttentionExtractor):
-            print(f"Invalid attention maps: {invalid_attn_maps}/{len(results)}={(invalid_attn_maps/len(results))*100}")
+    out_fname = f"{use_case}_{tok}_{sampler_conf['size']}_{fine_tune}_{extractor_name}"
+    out_file = os.path.join(res_dir, use_case, out_fname)
+    out_dir_path = out_file.split(os.sep)
+    out_dir = os.sep.join(out_dir_path[:-1])
+    Path(out_dir).mkdir(parents=True, exist_ok=True)
+    with open(f'{out_file}.pkl', 'wb') as f:
+        pickle.dump(results, f)
 
 
-def test_attn_tester(conf: dict, sampler_conf: dict, fine_tune: str, extractor_names: dict, tester_names: list):
-
-    dataset = get_dataset(conf)
-    use_case = conf['use_case']
+def load_saved_attn_data(use_case, conf, sampler_conf, fine_tune, attn_params, res_dir):
     tok = conf['tok']
-    model_name = conf['model_name']
-
-    if fine_tune is not None:
-        model_path = os.path.join(MODELS_DIR, fine_tune, f"{use_case}_{tok}_tuned")
+    size = sampler_conf['size']
+    extractor_name = attn_params['attn_extractor']
+    out_fname = f"{use_case}_{tok}_{size}_{fine_tune}_{extractor_name}"
+    data_path = os.path.join(res_dir, use_case, out_fname)
+    uc_attn = pickle.load(open(f"{data_path}.pkl", "rb"))
+    if extractor_name == 'attr_extractor':
+        AttributeAttentionExtractor.check_batch_attn_features(uc_attn)
+    elif extractor_name == 'word_extractor':
+        WordAttentionExtractor.check_batch_attn_features(uc_attn)
+    elif extractor_name == 'token_extractor':
+        AttentionExtractor.check_batch_attn_features(uc_attn)
     else:
-        model_path = None
-    model = get_model(model_name, fine_tune, model_path)
-
-    complete_sampler_conf = sampler_conf.copy()
-    complete_sampler_conf['permute'] = conf['permute']
-    sample = get_sample(dataset, complete_sampler_conf)
-
-    extractor_params = {}
-    for extractor_name in extractor_names:
-
-        if extractor_name == 'attr_extractor':
-            extractor_param = {
-                'dataset': sample,
-                'model': model,
-            }
-            extractor_param.update(extractor_names[extractor_name])
-            extractor_params[extractor_name] = extractor_param
-        else:
-            raise ValueError("Wrong extractor name.")
-
-    attn_extractors = get_extractors(extractor_params)
-
-    tester_params = {}
-    for tester_name in tester_names:
-
-        if tester_name == 'attr_tester':
-            tester_param = {
-                'permute': conf['permute'],
-                'model_attention_grid': (12, 12),
-            }
-            tester_params[tester_name] = tester_param
-        else:
-            raise ValueError("Wrong tester name.")
-
-    attn_testers = get_testers(tester_params)
-
-    for attn_extractor in attn_extractors:
-
-        print(type(attn_extractor))
-
-        for idx, (left_entity, right_entity, attn_params) in enumerate(attn_extractor.extract_all()):
-
-            print("\t", f"Row#{idx}")
-
-            for tester_id, tester in enumerate(attn_testers):
-
-                print("\t", "\t", type(tester))
-
-                result = tester.test(left_entity, right_entity, attn_params)
-                print(result.get_results().keys())
-                
-                
-def test_attn_analyzer(conf: dict, sampler_conf: dict, fine_tune: str, extractor_names: dict, tester_names: list):
-
-    dataset = get_dataset(conf)
-    use_case = conf['use_case']
-    tok = conf['tok']
-    model_name = conf['model_name']
-
-    if fine_tune is not None:
-        model_path = os.path.join(MODELS_DIR, fine_tune, f"{use_case}_{tok}_tuned")
-    else:
-        model_path = None
-    model = get_model(model_name, fine_tune, model_path)
-
-    complete_sampler_conf = sampler_conf.copy()
-    complete_sampler_conf['permute'] = conf['permute']
-    sample = get_sample(dataset, complete_sampler_conf)
-
-    extractor_params = {}
-    for extractor_name in extractor_names:
-
-        if extractor_name == 'attr_extractor':
-            extractor_param = {
-                'dataset': sample,
-                'model': model,
-            }
-            extractor_param.update(extractor_names[extractor_name])
-            extractor_params[extractor_name] = extractor_param
-        else:
-            raise ValueError("Wrong extractor name.")
-
-    tester_params = {}
-    for tester_name in tester_names:
-
-        if tester_name == 'attr_tester':
-            tester_param = {
-                'permute': conf['permute'],
-                'model_attention_grid': (12, 12),
-            }
-            tester_params[tester_name] = tester_param
-        else:
-            raise ValueError("Wrong tester name.")
-
-    _, _, analyzers = get_analyzers(extractor_params, tester_params)
-
-    for analyzer in analyzers:
-
-        results = analyzer.analyze_all()
-
-        print(results)
+        raise NotImplementedError()
+    return uc_attn
 
 
 if __name__ == '__main__':
@@ -254,13 +81,13 @@ if __name__ == '__main__':
                  "Structured_Amazon-Google", "Structured_Walmart-Amazon", "Structured_Beer",
                  "Structured_iTunes-Amazon", "Textual_Abt-Buy", "Dirty_iTunes-Amazon", "Dirty_DBLP-ACM",
                  "Dirty_DBLP-GoogleScholar", "Dirty_Walmart-Amazon"]
+    # use_cases = ["Structured_Fodors-Zagats"]
 
     # [BEGIN] INPUT PARAMS ---------------------------------------------------------------------------------------------
     conf = {
-        'use_case': "Dirty_iTunes-Amazon",
-        'data_type': 'train',                       # 'train', 'test', 'valid'
+        'data_type': 'train',  # 'train', 'test', 'valid'
         'model_name': 'bert-base-uncased',
-        'tok': 'sent_pair',                         # 'sent_pair', 'attr', 'attr_pair'
+        'tok': 'sent_pair',  # 'sent_pair', 'attr', 'attr_pair'
         'label_col': 'label',
         'left_prefix': 'left_',
         'right_prefix': 'right_',
@@ -270,26 +97,113 @@ if __name__ == '__main__':
     }
 
     sampler_conf = {
-        'size': 100,
-        'target_class': 'both',                     # 'both', 0, 1
-        'seeds': [42, 42],                          # [42 -> class 0, 42 -> class 1]
+        'size': 50,
+        'target_class': 'both',  # 'both', 0, 1
+        'seeds': [42, 42],  # [42 -> class 0, 42 -> class 1]
     }
 
     fine_tune = 'simple'  # None, 'simple', 'advanced'
+
+    attn_params = {
+        'attn_extractor': 'token_extractor',     # 'attr_extractor', 'word_extractor', 'token_extractor'
+        'attn_extr_params': {'special_tokens': True},
+    }
+
+    if attn_params['attn_extractor'] == 'word_extractor' and conf['tok'] == 'attr_pair':
+        raise NotImplementedError()
+
+    # experiment = 'compute_attn', 'attr_to_cls', 'attr_to_cls_entropy', 'word_to_cls', 'entity_to_entity'
+    experiment = 'entity_to_entity'
     # [END] INPUT PARAMS -----------------------------------------------------------------------------------------------
 
-    # TEST 1
-    # test_dataset(conf)
+    if experiment == 'compute_attn':
+        # # no multi process
+        # for use_case in use_cases:
+        #     print(use_case)
+        #
+        #     uc_conf = conf.copy()
+        #     uc_conf['use_case'] = use_case
+        #     run_attn_extractor(uc_conf, sampler_conf, fine_tune, attn_params, MODELS_DIR, RESULTS_DIR)
 
-    # TEST 2
-    # test_sampler(conf, sampler_conf)
+        processes = []
+        for use_case in use_cases:
+            uc_conf = conf.copy()
+            uc_conf['use_case'] = use_case
+            p = Process(target=run_attn_extractor,
+                        args=(uc_conf, sampler_conf, fine_tune, attn_params, MODELS_DIR, RESULTS_DIR,))
+            processes.append(p)
 
-    # TEST 3
-    # test_attn_extractor(conf, sampler_conf, fine_tune, {'attr_extractor': {'special_tokens': True}})
-    test_attn_extractor(conf, sampler_conf, fine_tune, {'word_extractor': {'special_tokens': True}})
+        for p in processes:
+            p.start()
 
-    # TEST 4
-    # test_attn_tester(conf, sampler_conf, fine_tune, {'attr_extractor': {'special_tokens': False}}, ['attr_tester'])
-    
-    # TEST 5
-    # test_attn_analyzer(conf, sampler_conf, fine_tune, {'attr_extractor': {'special_tokens': False}}, ['attr_tester'])
+        for p in processes:
+            p.join()
+
+    elif experiment in ['attr_to_cls', 'attr_to_cls_entropy']:
+
+        assert attn_params['attn_extractor'] == 'attr_extractor'
+
+        out_fname = f"{conf['tok']}_{sampler_conf['size']}_{fine_tune}_{attn_params['attn_extractor']}_{experiment}.pdf"
+        out_file = os.path.join(RESULTS_DIR, out_fname)
+
+        uc_grouped_attn = {}
+        for use_case in use_cases:
+            uc_attn = load_saved_attn_data(use_case, conf, sampler_conf, fine_tune, attn_params, RESULTS_DIR)
+
+            target_categories = ['all', 'all_pred_pos', 'all_pred_neg']
+            if experiment == 'attr_to_cls':
+                grouped_attn_res = AttrToClsAttentionAnalyzer.group_or_aggregate(uc_attn,
+                                                                                 target_categories=target_categories)
+            else:
+                grouped_attn_res = AttrToClsAttentionAnalyzer.group_or_aggregate(uc_attn,
+                                                                                 target_categories=target_categories,
+                                                                                 agg_metric='mean')
+            uc_grouped_attn[use_case] = grouped_attn_res
+
+        if experiment == 'attr_to_cls':
+            AttrToClsAttentionAnalyzer.plot_multi_attr_to_cls_attn(uc_grouped_attn, save_path=out_file)
+        else:
+            entropy_res = AttrToClsAttentionAnalyzer.analyze_multi_results(uc_grouped_attn, analysis_type='entropy')
+            entropy_res = entropy_res.rename(index=ConfCreator().use_case_map)
+            AttrToClsAttentionAnalyzer.plot_attr_to_cls_attn_entropy(entropy_res, save_path=out_file)
+
+    elif experiment == 'word_to_cls':
+        assert attn_params['attn_extractor'] == 'word_extractor'
+
+        out_fname = f"{conf['tok']}_{sampler_conf['size']}_{fine_tune}_{attn_params['attn_extractor']}_{experiment}.pdf"
+        out_file = os.path.join(RESULTS_DIR, out_fname)
+
+        uc_grouped_attn = {}
+        for use_case in use_cases:
+            uc_attn = load_saved_attn_data(use_case, conf, sampler_conf, fine_tune, attn_params, RESULTS_DIR)
+
+    elif experiment == 'entity_to_entity':
+
+        assert attn_params['attn_extr_params']['special_tokens'] is True
+        tok = conf['tok']
+        text_unit = attn_params['attn_extractor'].split('_')[0]
+        out_fname = f"{conf['tok']}_{sampler_conf['size']}_{fine_tune}_{attn_params['attn_extractor']}_{experiment}.pdf"
+        out_file = os.path.join(RESULTS_DIR, out_fname)
+
+        uc_e2e_res = {}
+        for use_case in use_cases:
+            uc_attn = load_saved_attn_data(use_case, conf, sampler_conf, fine_tune, attn_params, RESULTS_DIR)
+            analyzer = EntityToEntityAttentionAnalyzer(uc_attn, text_unit=text_unit, tokenization=tok)
+            # same_e2e_res = analyzer.analyze(analysis_type='same_entity', ignore_special=True,
+            #                                 target_categories=['all_pred_pos', 'all_pred_neg'])
+            cross_e2e_res = analyzer.analyze(analysis_type='cross_entity', ignore_special=True,
+                                             target_categories=['all_pred_pos', 'all_pred_neg'])
+            #
+            # merged_e2e_res = {}
+            # cat_map = {'all': 'all', 'all_pred_pos': 'match', 'all_pred_neg': 'non_match'}
+            # for cat in same_e2e_res:
+            #     merged_e2e_res[f'same_{cat_map[cat]}'] = same_e2e_res[cat]
+            # for cat in cross_e2e_res:
+            #     merged_e2e_res[f'cross_{cat_map[cat]}'] = cross_e2e_res[cat]
+
+            uc_e2e_res[use_case] = cross_e2e_res
+
+        EntityToEntityAttentionAnalyzer.plot_multi_entity_to_entity_attn(uc_e2e_res, save_path=out_file)
+
+    else:
+        raise NotImplementedError()
