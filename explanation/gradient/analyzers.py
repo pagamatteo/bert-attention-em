@@ -261,6 +261,7 @@ class TopKGradientAnalyzer(object):
                         top_norm_stats[key] = np.sum(top_stats[key]) / len(top_stats[key])
                     else:
                         print("REMOVED ", cat, key, len(top_stats[key]))
+                    break   # select only the first attribute
             out_data[cat] = top_norm_stats
 
         out_stats = {}

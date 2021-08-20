@@ -117,7 +117,7 @@ if __name__ == '__main__':
     }
 
     # 'compute_grad', 'plot_grad', 'topk_word_grad', 'topk_word_grad_by_attr', 'topk_word_grad_by_attr_similarity'
-    experiment = 'topk_word_grad_by_attr_similarity'
+    experiment = 'plot_grad'
 
     # [END] PARAMS
 
@@ -152,21 +152,28 @@ if __name__ == '__main__':
     elif experiment == 'plot_grad':
         if grad_conf['text_unit'] == 'attrs':
             grad_agg_metric = 'max'
+            ignore_special = True
             out_plot_name = os.path.join(RESULT_DIR,
                                          f"grad_{conf['tok']}_{sampler_conf['size']}_{grad_conf['text_unit']}_{grad_agg_metric}.pdf")
             plot_multi_use_case_grads(conf, sampler_conf, fine_tune, grad_conf, use_cases, RESULT_DIR,
-                                      grad_agg_metrics=[grad_agg_metric], plot_type='box', out_plot_name=out_plot_name)
+                                      grad_agg_metrics=[grad_agg_metric], plot_type='box',
+                                      ignore_special=ignore_special, out_plot_name=out_plot_name)
             # plot_multi_use_case_grads(conf, sampler_conf, fine_tune, grad_conf, use_cases, RESULT_DIR,
-            #                           grad_agg_metrics=['max', 'avg'], plot_type='error')
+            #                           grad_agg_metrics=['max', 'avg'], plot_type='error',
+            #                           ignore_special=ignore_special)
         else:
+            ignore_special = True
             for use_case in use_cases:
                 uc_grad = load_saved_grads_data(use_case, conf, sampler_conf, fine_tune, grad_conf)
                 out_plot_name = os.path.join(RESULT_DIR, use_case,
                                              f"grad_{grad_conf['text_unit']}_{grad_conf['special_tokens']}")
                 plot_batch_grads(uc_grad, 'all', title_prefix=use_case, out_plot_name=out_plot_name,
-                                 ignore_special=True)
+                                 ignore_special=ignore_special)
 
     elif experiment in ['topk_word_grad', 'topk_word_grad_by_attr', 'topk_word_grad_by_attr_similarity']:
+
+        assert grad_conf['text_unit'] == 'words'
+
         stats_data = []
         for use_case in use_cases:
             uc_grad = load_saved_grads_data(use_case, conf, sampler_conf, fine_tune, grad_conf)
@@ -186,7 +193,6 @@ if __name__ == '__main__':
                     analyzed_data = analyzer.analyze('pos', by_attr=True, target_categories=['all'], entities=sample)
                 else:
                     topk_range = [1, 3, 5, 10]
-                    # topk_range = [3]
                     target_categories = ['all_pos']
                     analyzed_data = {}
                     for topk in topk_range:
@@ -211,9 +217,13 @@ if __name__ == '__main__':
 
         out_plot_name = os.path.join(RESULT_DIR, f"word_grad_analysis_{conf['tok']}_{sampler_conf['size']}.pdf")
         if experiment == 'topk_word_grad_by_attr':
-            plot_top_grad_stats(stats_data, out_plot_name=out_plot_name)
+            plot_top_grad_stats(stats_data, out_plot_name=out_plot_name, ylabel='Percent')
+        elif experiment == 'topk_word_grad':
+            plot_top_grad_stats(stats_data, out_plot_name=out_plot_name, stacked=True, share_legend=True,
+                                ylabel='Percent')
         else:
-            plot_top_grad_stats(stats_data, out_plot_name=out_plot_name, stacked=False, share_legend=False)
+            plot_top_grad_stats(stats_data, out_plot_name=out_plot_name, stacked=False, share_legend=False,
+                                ylabel='Acc.')
 
     else:
         raise ValueError("Experiment not found.")
