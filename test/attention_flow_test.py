@@ -44,12 +44,12 @@ def run_attn_flow_experiment(conf, sampler_conf, fine_tune, attn_flow_param, mod
     attn_graph_extr.extract(out_file=out_file)
 
 
-def load_saved_attn_graph_data(use_case, conf, sampler_conf, fine_tune, attn_flow_param):
+def load_saved_attn_graph_data(use_case, conf, sampler_conf, fine_tune, attn_flow_param, res_dir):
     tok = conf['tok']
     size = sampler_conf['size']
     text_unit = attn_flow_param['text_unit']
     out_fname = f"{use_case}_{tok}_{size}_{fine_tune}_{text_unit}"
-    data_path = os.path.join(RESULTS_DIR, use_case, out_fname)
+    data_path = os.path.join(res_dir, use_case, out_fname)
     uc_attn_graph = pickle.load(open(f"{data_path}.pkl", "rb"))
     AttentionGraphExtractor.check_batch_graph_attn_features(uc_attn_graph, text_unit=text_unit)
     return uc_attn_graph
@@ -73,34 +73,41 @@ def load_saved_attn_graph_data(use_case, conf, sampler_conf, fine_tune, attn_flo
 #                                                  title=plot_title.replace('graph', 'flow'))
 
 def plot_attention_graph(att_mat, text_units, flow_res, plot_attn_graph, plot_attn_flow, top_selection_method,
-                         plot_title, ax=None):
+                         plot_title, ax=None, save_path=None):
     adj_mat, labels_to_index = AttentionGraphUtils.get_adjmat(mat=att_mat,
                                                               input_text_units=text_units)
 
     if plot_attn_graph:
         target_res = adj_mat
+        target = 'graph'
 
     if plot_attn_flow:
         target_res = flow_res
         plot_title = plot_title.replace("graph", "flow")
+        target = 'flow'
 
     G = AttentionGraphUtils.create_attention_graph(target_res)
 
     if ax is None:
         plt.figure(1, figsize=(20, 12))
 
-    AttentionGraphUtils.plot_attention_graph(G, target_res, labels_to_index,
-                                             n_layers=att_mat.shape[0],
+    AttentionGraphUtils.plot_attention_graph(G, target_res, labels_to_index, n_layers=att_mat.shape[0],
                                              length=att_mat.shape[-1], plot_top_scores=top_selection_method, ax=ax)
 
     if ax is None:
         plt.title(plot_title)
+        plt.gca().axis('off')
+
+        if save_path is not None:
+            save_path += f'_{target}.png'
+            plt.savefig(save_path, bbox_inches='tight')
+
         plt.show()
     else:
         ax.set_title(plot_title)
 
 
-def plot_benchmark(use_cases, conf, sampler_conf, fine_tune, attn_flow_param, plot_params):
+def plot_benchmark(use_cases, conf, sampler_conf, fine_tune, attn_flow_param, plot_params, res_dir):
 
     assert isinstance(use_cases, list)
     assert len(use_cases) > 0
@@ -113,7 +120,8 @@ def plot_benchmark(use_cases, conf, sampler_conf, fine_tune, attn_flow_param, pl
     # load saved results and aggregate them
     res = {}
     for use_case in use_cases:
-        uc_attn_graph = load_saved_attn_graph_data(use_case, conf, sampler_conf, fine_tune, attn_flow_param)
+        uc_attn_graph = load_saved_attn_graph_data(use_case, conf, sampler_conf, fine_tune, attn_flow_param,
+                                                   RESULTS_DIR)
         aggregator = AggregateAttributeAttentionGraph(uc_attn_graph, target_categories=plot_params['target_categories'])
         _, uc_agg_attn_graph = aggregator.aggregate('mean')
 
@@ -138,9 +146,11 @@ def plot_benchmark(use_cases, conf, sampler_conf, fine_tune, attn_flow_param, pl
             axes = axes.flat
             suptitle = f'average {cat}'
             if item_to_plot[0] is True:
-                suptitle += ' attention graph'
+                target = 'attention graph'
+                suptitle += f' {target}'
             else:
-                suptitle += ' attention flow'
+                target = 'attention flow'
+                suptitle += f' {target}'
             fig.suptitle(suptitle)
 
             for idx, use_case in enumerate(cat_res):
@@ -157,16 +167,25 @@ def plot_benchmark(use_cases, conf, sampler_conf, fine_tune, attn_flow_param, pl
 
             plt.tight_layout()
             plt.subplots_adjust(wspace=-0.08, hspace=0.05)
+
+            out_fname = f"{target}_{conf['tok']}_{sampler_conf['size']}_{fine_tune}_{cat}.png"
+            out_file = os.path.join(res_dir, out_fname)
+            plt.savefig(out_file, bbox_inches='tight')
+
             plt.show()
 
 
-def plot_use_cases_sequentially(use_cases, conf, sampler_conf, fine_tune, attn_flow_param, plot_params):
+def plot_use_cases_sequentially(use_cases, conf, sampler_conf, fine_tune, attn_flow_param, plot_params, res_dir):
 
     # loop over the use cases
     for use_case in use_cases:
 
+        out_fname = f"{use_case}_{conf['tok']}_{sampler_conf['size']}_{fine_tune}"
+        out_file = os.path.join(res_dir, use_case, out_fname)
+
         # retrieved saved results
-        uc_attn_graph = load_saved_attn_graph_data(use_case, conf, sampler_conf, fine_tune, attn_flow_param)
+        uc_attn_graph = load_saved_attn_graph_data(use_case, conf, sampler_conf, fine_tune, attn_flow_param,
+                                                   RESULTS_DIR)
 
         if plot_params['group_by_cat']:
             # group data and optionally aggregate it
@@ -186,9 +205,11 @@ def plot_use_cases_sequentially(use_cases, conf, sampler_conf, fine_tune, attn_f
                     text_units = uc_agg_attn_graph[cat]['text_units']
                     flow_res = uc_agg_attn_graph[cat]['flow_vals']
                     plot_title = f'{use_case} average {cat} attention graph'
+                    out_file += f'_avg_{cat}'
 
                     plot_attention_graph(att_mat, text_units, flow_res, plot_params['plot_attn_graph'],
-                                         plot_params['plot_attn_flow'], plot_params['top_selection_method'], plot_title)
+                                         plot_params['plot_attn_flow'], plot_params['top_selection_method'], plot_title,
+                                         save_path=out_file)
 
             else:       # plot raw results by grouping them by data category
                 for cat in uc_grouped_attn_graph:
@@ -238,7 +259,7 @@ if __name__ == '__main__':
     conf = {
         'data_type': 'train',  # 'train', 'test', 'valid'
         'model_name': 'bert-base-uncased',
-        'tok': 'attr_pair',  # 'sent_pair', 'attr', 'attr_pair'
+        'tok': 'sent_pair',  # 'sent_pair', 'attr', 'attr_pair'
         'label_col': 'label',
         'left_prefix': 'left_',
         'right_prefix': 'right_',
@@ -260,14 +281,14 @@ if __name__ == '__main__':
     }
 
     # experiment = 'compute_attn_flow', 'plot_attn_flow'
-    experiment = 'compute_attn_flow'
+    experiment = 'plot_attn_flow'
     plot_params = {
         'plot_attn_graph': True,
         'plot_attn_flow': False,
         'group_by_cat': True,
         'agg': True,
         'top_selection_method': 'percentile',
-        'target_categories': ['all', 'all_pos', 'all_neg'],
+        'target_categories': ['all', 'all_pos', 'all_neg'],   # ['all', 'all_pos', 'all_neg'],
         'target_idx': None,
     }
 
@@ -298,5 +319,5 @@ if __name__ == '__main__':
 
         assert plot_params['plot_attn_graph'] or plot_params['plot_attn_flow']
 
-        plot_benchmark(use_cases, conf, sampler_conf, fine_tune, attn_flow_param, plot_params)
-        # plot_use_cases_sequentially(use_cases, conf, sampler_conf, fine_tune, attn_flow_param, plot_params)
+        plot_benchmark(use_cases, conf, sampler_conf, fine_tune, attn_flow_param, plot_params, RESULTS_DIR)
+        # plot_use_cases_sequentially(use_cases, conf, sampler_conf, fine_tune, attn_flow_param, plot_params, RESULTS_DIR)
