@@ -6,13 +6,13 @@ from torch.utils.data import DataLoader
 from sklearn.metrics import f1_score
 import os
 import pandas as pd
-from models.em_dataset import EMDataset
+from core.data_models.em_dataset import EMDataset
 from tqdm import tqdm
 from utils.data_collector import DataCollector
 from pathlib import Path
 
 
-PROJECT_DIR = Path(__file__).parent.parent
+PROJECT_DIR = Path(__file__).parent.parent.parent
 RESULTS_DIR = os.path.join(PROJECT_DIR, 'results', 'models', 'advanced')
 
 

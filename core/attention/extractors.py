@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 import torch
-from models.em_dataset import EMDataset
+from core.data_models.em_dataset import EMDataset
 from tqdm import tqdm
 import unicodedata
 
@@ -17,14 +17,18 @@ class AttentionExtractor(object):
     - all the other parameters provided in the record features
     """
 
-    def __init__(self, dataset: EMDataset, model, special_tokens: bool = True):
+    def __init__(self, dataset: EMDataset, model, **kwargs):
 
         assert isinstance(dataset, EMDataset), "Wrong data type for parameter 'dataset'."
 
         self.dataset = dataset
         self.tokenizer = dataset.tokenizer
         self.model = model
-        self.special_tokens = special_tokens
+        self.special_tokens = True
+        if kwargs is not None:
+            if 'special_tokens' in kwargs:
+                assert isinstance(kwargs['special_tokens'], bool)
+                self.special_tokens = kwargs['special_tokens']
 
         self.model.eval()
 
@@ -112,14 +116,18 @@ class WordAttentionExtractor(AttentionExtractor):
     This class extract word-level attention.
     """
 
-    def __init__(self, dataset: EMDataset, model, special_tokens=False):
+    def __init__(self, dataset: EMDataset, model, **kwargs):
 
         super().__init__(dataset, model)
         self.dataset_len = len(dataset)
         self.tokenizer = dataset.tokenizer
         self.max_len = dataset.max_len
         self.tokenization = dataset.tokenization
-        self.special_tokens = special_tokens
+        self.special_tokens = False
+        if kwargs is not None:
+            if 'special_tokens' in kwargs:
+                assert isinstance(kwargs['special_tokens'], bool)
+                self.special_tokens = kwargs['special_tokens']
 
     @staticmethod
     def check_attn_features(attn_features: tuple):
@@ -420,7 +428,7 @@ class AttributeAttentionExtractor(AttentionExtractor):
     This class extracts attribute-level attention maps.
     """
 
-    def __init__(self, dataset: EMDataset, model, special_tokens=False):
+    def __init__(self, dataset: EMDataset, model, **kwargs):
 
         super().__init__(dataset, model)
         self.dataset_len = len(dataset)
@@ -429,7 +437,18 @@ class AttributeAttentionExtractor(AttentionExtractor):
         self.attrs = dataset.columns
         self.tokenization = dataset.tokenization
         self.invalid_attr_attn_maps = 0
-        self.special_tokens = special_tokens
+        self.special_tokens = False
+        self.agg_metric = 'mean'
+        self.available_agg_metrics = ['mean', 'max']
+        if kwargs is not None:
+            if 'special_tokens' in kwargs:
+                assert isinstance(kwargs['special_tokens'], bool)
+                self.special_tokens = kwargs['special_tokens']
+
+            if 'agg_metric' in kwargs:
+                assert isinstance(kwargs['agg_metric'], str)
+                assert kwargs['agg_metric'] in self.available_agg_metrics
+                self.agg_metric = kwargs['agg_metric']
 
     @staticmethod
     def check_attn_features(attn_features: tuple):
@@ -481,7 +500,10 @@ class AttributeAttentionExtractor(AttentionExtractor):
         attr_to_attr_attn = np.empty((len(all_idxs), len(all_idxs)))
         for idx, (attr_start, attr_end) in enumerate(all_idxs):
             assert len(attr_to_word_attn[attr_start:attr_end, :]) > 0
-            attr_to_attr_attn[idx, :] = attr_to_word_attn[attr_start:attr_end, :].mean(0)
+            if self.agg_metric == 'mean':
+                attr_to_attr_attn[idx, :] = attr_to_word_attn[attr_start:attr_end, :].mean(0)
+            else:
+                attr_to_attr_attn[idx, :] = attr_to_word_attn[attr_start:attr_end, :].max(0)
 
         # normalize the attention scores by columns to make them to sum to 1 (as the
         # original softmax)

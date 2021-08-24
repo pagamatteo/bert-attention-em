@@ -1,10 +1,10 @@
 import copy
-
+import pickle
 import matplotlib.pyplot as plt
 import pandas as pd
 from tqdm import tqdm
 from utils.result_collector import TestResultCollector
-from attention.extractors import AttributeAttentionExtractor, WordAttentionExtractor, AttentionExtractor
+from core.attention.extractors import AttributeAttentionExtractor, WordAttentionExtractor, AttentionExtractor
 import numpy as np
 from utils.result_collector import BinaryClassificationResultsAggregator
 from scipy.stats import entropy
@@ -27,13 +27,21 @@ class AttentionMapAnalyzer(object):
         attention maps (integrated with additional params) and returns the results
     """
 
-    def __init__(self, attn_extractor, testers: list):
+    def __init__(self, attn_extractor, testers: list, **kwargs):
 
         assert isinstance(testers, list), "Wrong data type for parameter 'testers'."
         assert len(testers) > 0, "Empty tester list."
 
         self.attn_extractor = attn_extractor
         self.testers = testers
+        self.pre_computed_attns = None
+        if kwargs is not None:
+            if 'pre_computed_attns' in kwargs and kwargs['pre_computed_attns'] is not None:
+                pre_computed_attns = pickle.load(open(f"{kwargs['pre_computed_attns']}", "rb"))
+                attn_extractor.check_batch_attn_features(pre_computed_attns)
+                print("Using pre-computed attentions.")
+                self.pre_computed_attns = pre_computed_attns
+
         res = {
             'all': None,
             'true_match': None,
@@ -144,14 +152,12 @@ class AttentionMapAnalyzer(object):
 
     def __getitem__(self, idx: int):
 
-        left_entity, right_entity, attn_params = self.attn_extractor[idx]
+        if self.pre_computed_attns is not None:
+            left_entity, right_entity, attn_params = self.pre_computed_attns[idx]
 
-        assert isinstance(left_entity, pd.Series), "Wrong data type for parameter 'left_entity'."
-        assert isinstance(right_entity, pd.Series), "Wrong data type for parameter 'right_entity'."
-        assert isinstance(attn_params, dict), "Wrong data type for parameter 'attn_params'."
-        assert 'preds' in attn_params, "predictions not found."
-        assert 'labels' in attn_params, "labels not found."
-        assert 'text_units' in attn_params, "'text_units' not found."
+        else:
+            left_entity, right_entity, attn_params = self.attn_extractor[idx]
+            self.attn_extractor.check_attn_features((left_entity, right_entity, attn_params))
 
         label = attn_params['labels'].item()
         pred = None

@@ -13,8 +13,14 @@ class ConfCreator(object):
             'tok': ['attr_pair', 'sent_pair'],
             'size': [None],
             'fine_tune_method': ['simple', None], # ['advanced', 'simple', None],
-            'extractor': ['attr_extractor'],
-            'tester': ['attr_tester'],
+            'extractor': {
+                'attn_extractor': ['attr_extractor', 'word_extractor'],
+                'attn_extr_params': ['special_tokens', 'agg_metric'],
+            },
+            'tester': {
+                'tester': ['attr_tester'],
+                'tester_params': ['ignore_special']
+            },
         }
         self.use_case_map = {
             "Structured_Fodors-Zagats": 'S-FZ',
@@ -34,13 +40,19 @@ class ConfCreator(object):
     def validate_conf(self, conf: dict):
         assert isinstance(conf, dict), "Wrong data type for parameter 'conf'."
         assert all([p in self.conf_template for p in conf]), "Wrong data format for parameter 'conf'."
-        wrong_format = False
+
+        err_msg = "Wrong data format for parameter 'conf'."
         for (k, v) in conf.items():
-            if v not in self.conf_template[k] and v != self.conf_template[k]:
-                wrong_format = True
-                break
-        if wrong_format:
-            raise ValueError("Wrong data format for parameter 'conf'.")
+            if k in ['extractor', 'tester']:
+                assert isinstance(v, dict), err_msg
+                assert all([p in self.conf_template[k] for p in v.keys()]), err_msg
+                for subk, subv in v.items():
+                    if isinstance(subv, dict):
+                        assert all([p in self.conf_template[k][subk] for p in subv.keys()]), err_msg
+                    else:
+                        assert subv in self.conf_template[k][subk], err_msg
+            else:
+                assert v in self.conf_template[k] or v == self.conf_template[k], err_msg
 
         return conf
 

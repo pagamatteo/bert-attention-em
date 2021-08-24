@@ -1,6 +1,4 @@
-import logging
-
-from models.em_dataset import EMDataset
+from core.data_models.em_dataset import EMDataset
 import pandas as pd
 
 

@@ -5,12 +5,10 @@ import pandas as pd
 from transformers import AutoTokenizer
 from utils.general import get_dataset, get_model, get_sample
 from pathlib import Path
-from explanation.gradient.plot_gradients import plot_grads, plot_batch_grads, plot_multi_use_case_grads,\
+from core.explanation.gradient.plot_gradients import plot_batch_grads, plot_multi_use_case_grads,\
     plot_top_grad_stats
-from explanation.gradient.extractors import EntityGradientExtractor, AggregateAttributeGradient
-from explanation.gradient.analyzers import TopKGradientAnalyzer
-import logging
-from multiprocessing import Process
+from core.explanation.gradient.extractors import EntityGradientExtractor
+from core.explanation.gradient.analyzers import TopKGradientAnalyzer
 import pickle
 
 PROJECT_DIR = Path(__file__).parent.parent

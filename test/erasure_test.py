@@ -8,11 +8,10 @@ import pickle
 from utils.general import get_dataset, get_model, get_sample
 from utils.nlp import get_synonyms_from_sent_pair, get_random_words_from_sent_pair, get_common_words_from_sent_pair, \
     get_synonyms_or_common_words_from_sent_pair, simple_tokenization_and_clean
-from explanation.erasure.extractors import DeltaPredictionExtractor
-from explanation.gradient.extractors import EntityGradientExtractor
-from explanation.gradient.utils import get_words_sorted_by_gradient, get_pair_words_sorted_by_gradient
-from explanation.erasure.plot_erasure_results import plot_delta_scores, plot_erasure_method_hits
-from explanation.erasure.analyzers import ErasureMethodHitsAnalysis
+from core.explanation.erasure.extractors import DeltaPredictionExtractor
+from core.explanation.gradient.utils import get_words_sorted_by_gradient, get_pair_words_sorted_by_gradient
+from core.explanation.erasure.plot_erasure_results import plot_delta_scores, plot_erasure_method_hits
+from core.explanation.erasure.analyzers import ErasureMethodHitsAnalysis
 from test.gradient_test import load_saved_grads_data
 
 

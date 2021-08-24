@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 import pandas as pd
-from explanation.erasure.extractors import AggregateDeltaPredictionScores
+from core.explanation.erasure.extractors import AggregateDeltaPredictionScores
 
 
 def plot_delta_scores(delta_scores, plot_target_data_type='all', plot_target_delta_metric='jsd',

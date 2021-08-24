@@ -1,9 +1,8 @@
 import numpy as np
 import networkx as nx
-import matplotlib.pyplot as plt
 import pandas as pd
 from tqdm import tqdm
-from attention.extractors import AttentionExtractor, AttributeAttentionExtractor
+from core.attention.extractors import AttentionExtractor, AttributeAttentionExtractor
 import pickle
 import os
 import pathlib

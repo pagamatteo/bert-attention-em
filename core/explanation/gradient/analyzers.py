@@ -1,4 +1,4 @@
-from explanation.gradient.extractors import EntityGradientExtractor
+from core.explanation.gradient.extractors import EntityGradientExtractor
 from utils.result_collector import BinaryClassificationResultsAggregator
 import numpy as np
 import string
@@ -6,7 +6,7 @@ import re
 import spacy
 from spacy.tokenizer import Tokenizer
 import pandas as pd
-from models.em_dataset import EMDataset
+from core.data_models.em_dataset import EMDataset
 from utils.nlp import get_pos_tag, get_most_similar_words_from_sent_pair
 
 

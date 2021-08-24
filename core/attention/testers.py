@@ -4,6 +4,8 @@ import os
 import matplotlib.pyplot as plt
 import seaborn as sns
 from utils.result_collector import TestResultCollector
+from utils.test_utils import ConfCreator
+from utils.plot import plot_left_to_right_heatmap
 
 
 class GenericAttributeAttentionTest(object):
@@ -25,15 +27,17 @@ class GenericAttributeAttentionTest(object):
     pair of attributes of the two entities
     """
 
-    def __init__(self, permute=False, model_attention_grid=(12, 12)):
+    def __init__(self, permute: bool = False, model_attention_grid: tuple = (12, 12), ignore_special: bool = True):
         assert isinstance(permute, bool), "Wrong data type for parameter 'permute'."
         assert isinstance(model_attention_grid, tuple), "Wrong data type for parameter 'model_attention_grid'."
         assert len(model_attention_grid) == 2, "'model_attention_grid' has to specify two dimensions."
         assert model_attention_grid[0] > 0 and model_attention_grid[
             1] > 0, "Wrong value for parameter 'model_attention_grid'."
+        assert isinstance(ignore_special, bool), "Wrong data type for parameter 'ignore_special'."
 
         self.permute = permute
         self.model_attention_grid = model_attention_grid
+        self.ignore_special = ignore_special
         self.result_names = ['lr_match_attr_attn_loc', 'rl_match_attr_attn_loc',
                              'match_attr_attn_loc']
 
@@ -122,8 +126,10 @@ class GenericAttributeAttentionTest(object):
         assert isinstance(right_entity, pd.Series), "Wrong data type for parameter 'right_entity'."
         assert isinstance(attn_params, dict), "Wrong data type for parameter 'attn_params'."
         assert 'attns' in attn_params, "Attention maps parameter non found."
+        assert 'text_units' in attn_params, "Text units non found."
 
         attr_attns = attn_params['attns']
+        text_units = attn_params['text_units']
 
         if attr_attns is None:
             return None
@@ -131,6 +137,12 @@ class GenericAttributeAttentionTest(object):
         n_layers = attr_attns.shape[0]
         n_heads = attr_attns.shape[1]
         n_attrs = attr_attns[0][0].shape[0]
+        if self.ignore_special is True and text_units is not None and text_units[0] == '[CLS]':
+            sep_idxs = np.where(np.array(text_units) == '[SEP]')[0]
+            if len(sep_idxs) > 1:                   # attr-pair mode
+                n_attrs -= len(sep_idxs) * 2 + 1
+            else:                                   # sent-pair mode
+                n_attrs -= 3    # [CLS] + 2 x [SEP]
         assert self.model_attention_grid == (n_layers, n_heads)
 
         # initialize the result collector
@@ -141,10 +153,18 @@ class GenericAttributeAttentionTest(object):
             else:
                 res_collector.save_result(np.zeros((n_layers, n_heads)), result_name)
 
-        # loop over the attention maps and analize them
+        # loop over the attention maps and analyze them
         for layer in range(n_layers):
             for head in range(n_heads):
                 attn_map = attr_attns[layer][head]
+
+                # (optional) remove special tokens
+                if self.ignore_special is True and text_units is not None and text_units[0] == '[CLS]':
+                    complete_text_units = text_units + text_units[1:]
+                    sep_idxs = list(np.where(np.array(complete_text_units) == '[SEP]')[0])
+
+                    valid_idxs = np.array(list(set(range(1, len(attn_map))).difference(sep_idxs)))
+                    attn_map = attn_map[valid_idxs][:, valid_idxs]
 
                 # analyze the current attention map
                 test_res = self._test_attr_attention(attn_map)
@@ -168,7 +188,7 @@ class GenericAttributeAttentionTest(object):
         # update/add some results
         res_collector.combine_results('lr_match_attr_attn_loc',
                                       'rl_match_attr_attn_loc',
-                                      lambda x, y: np.maximum(x, y),              # FIXME: sum or average or maximum?
+                                      lambda x, y: np.maximum(x, y),
                                       'match_attr_attn_loc')
 
         for result_name in self.property_mask_res:
@@ -212,6 +232,7 @@ class GenericAttributeAttentionTest(object):
                     title = f'{title_prefix}_{title}'
                 fig.suptitle(title)
 
+                # # only for test
                 # map = ConfCreator().use_case_map
                 # plot_left_to_right_heatmap(score, vmin=vmin, vmax=vmax, title=map[title_prefix], is_annot=True,
                 #                            out_file_name=f'{title_prefix}.png')

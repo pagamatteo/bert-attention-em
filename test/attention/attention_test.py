@@ -3,13 +3,11 @@ import os
 from pathlib import Path
 from multiprocessing import Process
 import pickle
-from attention.extractors import AttributeAttentionExtractor, WordAttentionExtractor, AttentionExtractor
-from attention.analyzers import AttrToClsAttentionAnalyzer, EntityToEntityAttentionAnalyzer
+from core.attention.extractors import AttributeAttentionExtractor, WordAttentionExtractor, AttentionExtractor
+from core.attention.analyzers import AttrToClsAttentionAnalyzer, EntityToEntityAttentionAnalyzer
 from utils.test_utils import ConfCreator
-import pandas as pd
 
-
-PROJECT_DIR = Path(__file__).parent.parent
+PROJECT_DIR = Path(__file__).parent.parent.parent
 MODELS_DIR = os.path.join(PROJECT_DIR, 'results', 'models')
 RESULTS_DIR = os.path.join(PROJECT_DIR, 'results', 'attention')
 
@@ -49,7 +47,8 @@ def run_attn_extractor(conf: dict, sampler_conf: dict, fine_tune: str, attn_para
 
     results = attn_extractor.extract_all()
 
-    out_fname = f"{use_case}_{tok}_{sampler_conf['size']}_{fine_tune}_{extractor_name}"
+    params = '_'.join([f'{x[0]}={x[1]}' for x in attn_params['attn_extr_params'].items()])
+    out_fname = f"ATTN_{use_case}_{tok}_{sampler_conf['size']}_{fine_tune}_{extractor_name}_{params}"
     out_file = os.path.join(res_dir, use_case, out_fname)
     out_dir_path = out_file.split(os.sep)
     out_dir = os.sep.join(out_dir_path[:-1])
@@ -62,7 +61,8 @@ def load_saved_attn_data(use_case, conf, sampler_conf, fine_tune, attn_params, r
     tok = conf['tok']
     size = sampler_conf['size']
     extractor_name = attn_params['attn_extractor']
-    out_fname = f"{use_case}_{tok}_{size}_{fine_tune}_{extractor_name}"
+    params = '_'.join([f'{x[0]}={x[1]}' for x in attn_params['attn_extr_params'].items()])
+    out_fname = f"ATTN_{use_case}_{tok}_{size}_{fine_tune}_{extractor_name}_{params}"
     data_path = os.path.join(res_dir, use_case, out_fname)
     uc_attn = pickle.load(open(f"{data_path}.pkl", "rb"))
     if extractor_name == 'attr_extractor':
@@ -81,7 +81,7 @@ if __name__ == '__main__':
                  "Structured_Amazon-Google", "Structured_Walmart-Amazon", "Structured_Beer",
                  "Structured_iTunes-Amazon", "Textual_Abt-Buy", "Dirty_iTunes-Amazon", "Dirty_DBLP-ACM",
                  "Dirty_DBLP-GoogleScholar", "Dirty_Walmart-Amazon"]
-    # use_cases = ["Structured_Fodors-Zagats"]
+    # use_cases = ["Structured_Beer"]
 
     # [BEGIN] INPUT PARAMS ---------------------------------------------------------------------------------------------
     conf = {
@@ -97,7 +97,7 @@ if __name__ == '__main__':
     }
 
     sampler_conf = {
-        'size': 50,
+        'size': None,
         'target_class': 'both',  # 'both', 0, 1
         'seeds': [42, 42],  # [42 -> class 0, 42 -> class 1]
     }
@@ -105,15 +105,15 @@ if __name__ == '__main__':
     fine_tune = 'simple'  # None, 'simple', 'advanced'
 
     attn_params = {
-        'attn_extractor': 'token_extractor',     # 'attr_extractor', 'word_extractor', 'token_extractor'
-        'attn_extr_params': {'special_tokens': True},
+        'attn_extractor': 'attr_extractor',     # 'attr_extractor', 'word_extractor', 'token_extractor'
+        'attn_extr_params': {'special_tokens': True, 'agg_metric': 'mean'},
     }
 
     if attn_params['attn_extractor'] == 'word_extractor' and conf['tok'] == 'attr_pair':
         raise NotImplementedError()
 
     # experiment = 'compute_attn', 'attr_to_cls', 'attr_to_cls_entropy', 'word_to_cls', 'entity_to_entity'
-    experiment = 'entity_to_entity'
+    experiment = 'compute_attn'
     # [END] INPUT PARAMS -----------------------------------------------------------------------------------------------
 
     if experiment == 'compute_attn':

@@ -6,9 +6,9 @@ from utils.plot import plot_layers_heads_attention, plot_left_to_right_heatmap
 from utils.general import get_pipeline
 
 
-PROJECT_DIR = Path(__file__).parent.parent
+PROJECT_DIR = Path(__file__).parent.parent.parent
 MODELS_DIR = os.path.join(PROJECT_DIR, 'results', 'models')
-RESULTS_DIR = os.path.join(PROJECT_DIR, 'results', 'analysis')
+RESULTS_DIR = os.path.join(PROJECT_DIR, 'results', 'attention')
 
 
 def run_inspection(conf: dict, inspect_row_idx: int, save: bool):
@@ -17,12 +17,19 @@ def run_inspection(conf: dict, inspect_row_idx: int, save: bool):
     assert isinstance(save, bool), "Wrong data type for parameter 'save'."
 
     use_case = conf['use_case']
-    out_path = os.path.join(RESULTS_DIR, use_case, "inspection")
+    out_path = os.path.join(RESULTS_DIR, use_case)
     Path(out_path).mkdir(parents=True, exist_ok=True)
 
-    template_file_name = '{}_{}_{}_{}_{}_{}_{}'.format(use_case, conf['data_type'], conf['extractor'],
-                                                       conf['tester'], conf['fine_tune_method'],
-                                                       conf['permute'], conf['tok'])
+    extractor_name = conf['extractor']['attn_extractor']
+    extractor_params = '_'.join([f'{x[0]}={x[1]}' for x in conf['extractor']['attn_extr_params'].items()])
+    tester_name = conf['tester']['tester']
+    tester_params = '_'.join([f'{x[0]}={x[1]}' for x in conf['tester']['tester_params'].items()])
+    template_file_name = 'INSPECTION_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}'.format(use_case, conf['data_type'],
+                                                                           extractor_name, tester_name,
+                                                                           conf['fine_tune_method'],
+                                                                           conf['permute'], conf['tok'],
+                                                                           conf['size'], extractor_params,
+                                                                           tester_params)
 
     extractors, testers, analyzers = get_pipeline(conf)
     attn_extractor = extractors[0]
@@ -35,7 +42,7 @@ def run_inspection(conf: dict, inspect_row_idx: int, save: bool):
     print("LABEL: {}".format(label))
     print("PRED: {}".format(pred))
 
-    template_file_name += "_{}_{}".format(label, pred)
+    template_file_name += "_{}_{}_{}".format(inspect_row_idx, label, pred)
 
     params_to_inspect = {
         'attr_tester': ['match_attr_attn_loc'],
@@ -43,7 +50,7 @@ def run_inspection(conf: dict, inspect_row_idx: int, save: bool):
     original_testers = [conf['tester']]
     for idx, tester in enumerate(testers):
 
-        tester_name = original_testers[idx]
+        tester_name = original_testers[idx]['tester']
         test_params_to_inspect = params_to_inspect[tester_name]
         inspect_row_test_results = inspect_row_results[idx]
 
@@ -101,11 +108,21 @@ if __name__ == '__main__':
         'verbose': False,
         'size': None,
         'target_class': 'both',  # 'both', 0, 1
-        'fine_tune_method': None,  # None, 'simple', 'advanced'
-        'extractor': 'attr_extractor',
-        'tester': 'attr_tester',
+        'fine_tune_method': 'simple',  # None, 'simple', 'advanced'
+        'extractor': {
+            'attn_extractor': 'attr_extractor',  # word_extractor
+            'attn_extr_params': {'special_tokens': False, 'agg_metric': 'mean'},
+        },
+        'tester': {
+            'tester': 'attr_tester',
+            'tester_params': {'ignore_special': True}
+        },
+        'analyzer_params': {'pre_computed_attns': None},
         'seeds': [42, 42]
     }
+
+    if conf['fine_tune_method'] is None:
+        assert conf['extractor']['att_extr_params']['special_tokens'] is False
 
     save = False
     inspect_row_idx = 0

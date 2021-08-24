@@ -3,13 +3,12 @@ import pandas as pd
 from torch.nn.functional import softmax
 from scipy.spatial.distance import jensenshannon
 from tqdm import tqdm
-import logging
 import numpy as np
 import pathlib
 import pickle
 import os
 
-from models.em_dataset import EMDataset
+from core.data_models.em_dataset import EMDataset
 from utils.bert_utils import tokenize_entity_pair
 from utils.result_collector import BinaryClassificationResultsAggregator
 

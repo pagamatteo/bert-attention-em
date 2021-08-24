@@ -5,12 +5,12 @@ from pathlib import Path
 from collections import OrderedDict
 
 from utils.data_collector import DataCollector
-from models.em_dataset import EMDataset
+from core.data_models.em_dataset import EMDataset
 from utils.data_selection import Sampler
-from fine_tuning.advanced_fine_tuning import MatcherTransformer
-from attention.extractors import AttributeAttentionExtractor, WordAttentionExtractor, AttentionExtractor
-from attention.testers import GenericAttributeAttentionTest
-from attention.analyzers import AttentionMapAnalyzer
+from utils.fine_tuning.advanced_fine_tuning import MatcherTransformer
+from core.attention.extractors import AttributeAttentionExtractor, WordAttentionExtractor, AttentionExtractor
+from core.attention.testers import GenericAttributeAttentionTest
+from core.attention.analyzers import AttentionMapAnalyzer
 
 PROJECT_DIR = Path(__file__).parent.parent
 MODELS_DIR = os.path.join(PROJECT_DIR, 'results', 'models')
@@ -122,19 +122,22 @@ def get_extractors(extractor_params: dict):
     for extractor_name in extractor_params:
 
         extractor_param = extractor_params[extractor_name]
-        params = ['dataset', 'model', 'special_tokens']
-        assert all([p in params for p in extractor_param]), "Wrong value for attr_extractor."
+        params = ['dataset', 'model']
+        assert all([p in extractor_param for p in params]), "Wrong value for attr_extractor."
 
         dataset = extractor_param['dataset']
         model = extractor_param['model']
-        special_tokens = extractor_param['special_tokens']
+        other_params = {}
+        for p in extractor_param:
+            if p not in params:
+                other_params[p] = extractor_param[p]
 
         if extractor_name in 'attr_extractor':
-            attn_extractor = AttributeAttentionExtractor(dataset, model, special_tokens=special_tokens)
+            attn_extractor = AttributeAttentionExtractor(dataset, model, **other_params)
         elif extractor_name in 'word_extractor':
-            attn_extractor = WordAttentionExtractor(dataset, model, special_tokens=special_tokens)
+            attn_extractor = WordAttentionExtractor(dataset, model, **other_params)
         else:   # token extractor
-            attn_extractor = AttentionExtractor(dataset, model, special_tokens=special_tokens)
+            attn_extractor = AttentionExtractor(dataset, model, **other_params)
 
         extractors.append(attn_extractor)
 
@@ -154,13 +157,10 @@ def get_testers(tester_params: dict):
         if tester_name == 'attr_tester':
 
             tester_param = tester_params[tester_name]
-            params = ['permute', 'model_attention_grid']
+            params = ['permute', 'model_attention_grid', 'ignore_special']
             assert all([p in params for p in tester_param]), "Wrong value for attr_tester."
 
-            permute = tester_param['permute']
-            model_attention_grid = tester_param['model_attention_grid']
-
-            attn_tester = GenericAttributeAttentionTest(permute=permute, model_attention_grid=model_attention_grid)
+            attn_tester = GenericAttributeAttentionTest(**tester_param)
 
         else:
             raise NotImplementedError()
@@ -170,11 +170,11 @@ def get_testers(tester_params: dict):
     return testers
 
 
-def get_analyzers(extractor_params: dict, tester_params: dict):
+def get_analyzers(extractor_params: dict, tester_params: dict, analyzer_params: dict):
     extractors = get_extractors(extractor_params)
     testers = get_testers(tester_params)
 
-    analyzers = [AttentionMapAnalyzer(extractor, testers) for extractor in extractors]
+    analyzers = [AttentionMapAnalyzer(extractor, testers, **analyzer_params) for extractor in extractors]
 
     return extractors, testers, analyzers
 
@@ -182,7 +182,8 @@ def get_analyzers(extractor_params: dict, tester_params: dict):
 def get_pipeline(conf):
     assert isinstance(conf, dict), "Wrong data type for parameter 'conf'."
     params = ['use_case', 'data_type', 'permute', 'model_name', 'tok', 'label_col', 'left_prefix', 'right_prefix',
-              'max_len', 'verbose', 'size', 'target_class', 'seeds', 'fine_tune_method', 'extractor', 'tester']
+              'max_len', 'verbose', 'size', 'target_class', 'seeds', 'fine_tune_method', 'extractor', 'tester',
+              'analyzer_params']
     assert all([p in conf for p in params]), "Wrong value for parameter 'conf'."
 
     # get dataset
@@ -200,29 +201,31 @@ def get_pipeline(conf):
 
     # prepare extractor params
     extractor_params = {}
-    extractor_name = conf['extractor']
+    extractor_name = conf['extractor']['attn_extractor']
     if extractor_name == 'attr_extractor':
         extractor_param = {
             'dataset': sample,
             'model': model,
         }
+        extractor_param.update(conf['extractor']['attn_extr_params'])
         extractor_params[extractor_name] = extractor_param
     else:
         raise ValueError("Wrong value for parameter 'extractor_names'.")
 
     # prepare testers params
     tester_params = {}
-    tester_name = conf['tester']
+    tester_name = conf['tester']['tester']
     if tester_name == 'attr_tester':
         tester_param = {
             'permute': conf['permute'],
             'model_attention_grid': (12, 12),
         }
+        tester_param.update(conf['tester']['tester_params'])
         tester_params[tester_name] = tester_param
     else:
         raise ValueError("Wrong tester name.")
 
-    return get_analyzers(extractor_params, tester_params)
+    return get_analyzers(extractor_params, tester_params, conf['analyzer_params'])
 
 
 def get_use_case_avg_attr_len(df, text_unit='char', pair_mode=False, left_prefix='left_', right_prefix='right_'):

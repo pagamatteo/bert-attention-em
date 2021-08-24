@@ -2,7 +2,7 @@ import logging
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from explanation.gradient.extractors import EntityGradientExtractor
+from core.explanation.gradient.extractors import EntityGradientExtractor
 import os
 import pickle
 

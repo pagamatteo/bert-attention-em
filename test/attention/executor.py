@@ -7,9 +7,9 @@ from pathlib import Path
 from utils.general import get_pipeline
 
 
-PROJECT_DIR = Path(__file__).parent.parent
+PROJECT_DIR = Path(__file__).parent.parent.parent
 MODELS_DIR = os.path.join(PROJECT_DIR, 'results', 'models')
-RESULTS_DIR = os.path.join(PROJECT_DIR, 'results', 'analysis')
+RESULTS_DIR = os.path.join(PROJECT_DIR, 'results', 'attention')
 
 
 def run(confs: list, num_attempts: int, save: bool):
@@ -18,6 +18,30 @@ def run(confs: list, num_attempts: int, save: bool):
     assert isinstance(num_attempts, int), "Wrong data type for parameter 'num_attempts'."
     assert num_attempts > 0, "Wrong value for parameter 'num_attempts'."
     assert isinstance(save, bool), "Wrong data type for parameter 'save'."
+
+    def update_conf_with_pre_computed_attn_path(conf):
+        assert 'analyzer_params' in conf
+        assert isinstance(conf['analyzer_params'], dict)
+        analyzer_params = conf['analyzer_params']
+        assert 'pre_computed_attns' in analyzer_params
+        pre_computed_attns = analyzer_params['pre_computed_attns']
+        if pre_computed_attns:
+            assert 'extractor' in conf
+            assert isinstance(conf['extractor'], dict)
+            assert all([p in ['attn_extractor', 'attn_extr_params'] for p in conf['extractor']])
+            attn_extractor = conf['extractor']['attn_extractor']
+            attn_extr_params = conf['extractor']['attn_extr_params']
+            assert isinstance(attn_extractor, str)
+            assert isinstance(attn_extr_params, dict)
+
+            params = '_'.join([f'{x[0]}={x[1]}' for x in attn_extr_params.items()])
+            out_fname = f"ATTN_{conf['use_case']}_{conf['tok']}_{conf['size']}_{conf['fine_tune_method']}_{attn_extractor}_{params}"
+            out_file = os.path.join(RESULTS_DIR, conf['use_case'], out_fname)
+            pre_computed_attns = f'{out_file}.pkl'
+
+        conf['analyzer_params']['pre_computed_attns'] = pre_computed_attns
+
+        return conf
 
     confs_by_use_case = {}
     for conf in confs:
@@ -39,12 +63,20 @@ def run(confs: list, num_attempts: int, save: bool):
         for idx, conf in enumerate(use_case_confs):
 
             print(conf)
+            conf = update_conf_with_pre_computed_attn_path(conf)
             _, _, analyzers = get_pipeline(conf)
             analyzer = analyzers[0]
 
-            template_file_name = '{}_{}_{}_{}_{}_{}_{}_{}'.format(use_case, conf['data_type'], conf['extractor'],
-                                                                  conf['tester'], conf['fine_tune_method'],
-                                                                  conf['permute'], conf['tok'], idx % num_attempts)
+            extractor_name = conf['extractor']['attn_extractor']
+            extractor_params = '_'.join([f'{x[0]}={x[1]}' for x in conf['extractor']['attn_extr_params'].items()])
+            tester_name = conf['tester']['tester']
+            tester_params = '_'.join([f'{x[0]}={x[1]}' for x in conf['tester']['tester_params'].items()])
+            template_file_name = 'ANALYSIS_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}'.format(use_case, conf['data_type'],
+                                                                                    extractor_name, tester_name,
+                                                                                    conf['fine_tune_method'],
+                                                                                    conf['permute'], conf['tok'],
+                                                                                    conf['size'], extractor_params,
+                                                                                    tester_params, idx % num_attempts)
 
             res_out_file_name = os.path.join(out_path, '{}.pickle'.format(template_file_name))
 
@@ -117,6 +149,10 @@ def run(confs: list, num_attempts: int, save: bool):
 
 
 if __name__ == '__main__':
+    use_cases = ["Structured_Fodors-Zagats", "Structured_DBLP-GoogleScholar", "Structured_DBLP-ACM",
+                 "Structured_Amazon-Google", "Structured_Walmart-Amazon", "Structured_Beer",
+                 "Structured_iTunes-Amazon", "Textual_Abt-Buy", "Dirty_iTunes-Amazon", "Dirty_DBLP-ACM",
+                 "Dirty_DBLP-GoogleScholar", "Dirty_Walmart-Amazon"]
 
     fixed_params = {
         'label_col': 'label',
@@ -124,10 +160,11 @@ if __name__ == '__main__':
         'right_prefix': 'right_',
         'max_len': 128,
         'verbose': False,
+        'analyzer_params': {'pre_computed_attns': True},
     }
 
     variable_params = {
-        'use_case': ["Structured_Fodors-Zagats"],
+        'use_case': use_cases,
         'data_type': ['train'],  #['train', 'test'],
         'permute': [False],
         'model_name': ['bert-base-uncased'],
@@ -135,9 +172,19 @@ if __name__ == '__main__':
         'size': [None],
         'target_class': ['both'],  # 'both', 0, 1
         'fine_tune_method': ['simple'],  # None, 'simple', 'advanced'
-        'extractor': ['attr_extractor'],
-        'tester': ['attr_tester'],
-        'seeds': [[42, 42]]  # , [42, 24], [42, 12]]
+        'extractor': [
+            {
+                'attn_extractor': 'attr_extractor',     # word_extractor
+                'attn_extr_params': {'special_tokens': True, 'agg_metric': 'mean'},
+            }
+        ],
+        'tester': [
+            {
+                'tester': 'attr_tester',
+                'tester_params': {'ignore_special': True}
+            }
+        ],
+        'seeds': [[42, 42]]#, [42, 24], [42, 12]]
     }
 
     confs_vals = list(itertools.product(*variable_params.values()))
@@ -145,7 +192,7 @@ if __name__ == '__main__':
     for conf in confs:
         conf.update(fixed_params)
 
-    save = False
+    save = True
     num_attempts = len(variable_params['seeds'])
 
     run(confs, num_attempts, save)

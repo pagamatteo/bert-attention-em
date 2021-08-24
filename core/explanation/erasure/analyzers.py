@@ -1,4 +1,4 @@
-from explanation.erasure.extractors import AggregateDeltaPredictionScores
+from core.explanation.erasure.extractors import AggregateDeltaPredictionScores
 from utils.result_collector import BinaryClassificationResultsAggregator
 import itertools
 import numpy as np

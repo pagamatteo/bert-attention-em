@@ -3,7 +3,7 @@ import pickle
 import copy
 import numpy as np
 from utils.result_collector import TestResultCollector
-from attention.testers import GenericAttributeAttentionTest
+from core.attention.testers import GenericAttributeAttentionTest
 from utils.plot import plot_results, plot_benchmark_results, plot_agg_results
 from pathlib import Path
 

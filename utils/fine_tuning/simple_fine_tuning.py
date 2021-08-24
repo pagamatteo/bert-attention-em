@@ -6,12 +6,12 @@ from tqdm import tqdm
 import torch
 from sklearn.metrics import f1_score
 
-from models.em_dataset import EMDataset
-from utils.general import get_dataset, get_sample
+from core.data_models.em_dataset import EMDataset
+from utils.general import get_dataset
 from pathlib import Path
 
 
-PROJECT_DIR = Path(__file__).parent.parent
+PROJECT_DIR = Path(__file__).parent.parent.parent
 RESULTS_DIR = os.path.join(PROJECT_DIR, 'results', 'models', 'simple')
 
 

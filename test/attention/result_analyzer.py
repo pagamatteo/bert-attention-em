@@ -10,8 +10,8 @@ from utils.test_utils import ConfCreator
 from utils.general import get_testers
 
 
-PROJECT_DIR = Path(__file__).parent.parent
-RESULTS_DIR = os.path.join(PROJECT_DIR, 'results', 'analysis')
+PROJECT_DIR = Path(__file__).parent.parent.parent
+RESULTS_DIR = os.path.join(PROJECT_DIR, 'results', 'attention')
 
 
 def get_results(conf: dict, use_cases: list):
@@ -20,12 +20,13 @@ def get_results(conf: dict, use_cases: list):
     assert len(use_cases) > 0, "Empty use case list."
 
     tester_params = {}
-    tester_name = conf['tester']
+    tester_name = conf['tester']['tester']
     if tester_name == 'attr_tester':
         tester_param = {
             'permute': conf['permute'],
             'model_attention_grid': (12, 12),
         }
+        tester_param.update(conf['tester']['tester_params'])
         tester_params[tester_name] = tester_param
     else:
         raise ValueError("Wrong tester name.")
@@ -40,9 +41,15 @@ def get_results(conf: dict, use_cases: list):
 
         out_path = os.path.join(RESULTS_DIR, use_case)
 
-        template_file_name = '{}_{}_{}_{}_{}_{}_{}_AVG.pickle'.format(use_case, conf['data_type'], conf['extractor'],
-                                                                      conf['tester'], conf['fine_tune_method'],
-                                                                      conf['permute'], conf['tok'])
+        extractor_name = conf['extractor']['attn_extractor']
+        extractor_params = '_'.join([f'{x[0]}={x[1]}' for x in conf['extractor']['attn_extr_params'].items()])
+        tester_params = '_'.join([f'{x[0]}={x[1]}' for x in conf['tester']['tester_params'].items()])
+        template_file_name = 'ANALYSIS_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_AVG.pickle'.format(use_case, conf['data_type'],
+                                                                                        extractor_name, tester_name,
+                                                                                        conf['fine_tune_method'],
+                                                                                        conf['permute'], conf['tok'],
+                                                                                        conf['size'], extractor_params,
+                                                                                        tester_params)
 
         res_file = os.path.join(out_path, template_file_name)
         with open(res_file, 'rb') as f:
@@ -217,8 +224,8 @@ def use_case_analysis(conf: dict, plot_params: list, categories: list, agg_fns: 
         res = aggregate_results(res, agg_fns, target_agg_result_ids)
         display_uc = [conf_creator.use_case_map[conf['use_case']]]
         plot_agg_results(res, target_cats=categories, xticks=display_uc, vmin=-0.5, vmax=0.5, agg=False)
-    else:
 
+    else:
         plot_results(res, tester, target_cats=categories, plot_params=plot_params)
 
 
@@ -336,79 +343,85 @@ def benchmark_comparison_analysis(confs: list, plot_params: list, categories: li
 if __name__ == '__main__':
 
     conf = {
-        'use_case': "Structured_Fodors-Zagats",
+        'use_case': "Structured_Beer",
         'data_type': 'train',
         'permute': False,
         'model_name': 'bert-base-uncased',
         'tok': 'sent_pair',
         'size': None,
-        'fine_tune_method': None,
-        'extractor': 'attr_extractor',
-        'tester': 'attr_tester',
+        'fine_tune_method': 'simple',       # None, 'simple'
+        'extractor': {
+            'attn_extractor': 'attr_extractor',  # word_extractor
+            'attn_extr_params': {'special_tokens': True, 'agg_metric': 'mean'},
+        },
+        'tester': {
+            'tester': 'attr_tester',
+            'tester_params': {'ignore_special': True}
+        },
     }
     conf_creator = ConfCreator()
     conf_creator.validate_conf(conf)
 
-    confs = conf_creator.get_confs(conf, ['use_case'])
+    # # for testing one use case at a time
+    # confs = conf_creator.get_confs(conf, ['use_case'])
+    # for conf in confs:
 
-    for conf in confs:
+    analysis_target = 'use_case'
+    # analysis_target = 'benchmark'
 
-        analysis_target = 'use_case'
-        # analysis_target = 'benchmark'
+    analysis_type = 'simple'
+    # analysis_type = 'comparison'
 
-        analysis_type = 'simple'
-        # analysis_type = 'comparison'
+    # plot_params = ['match_attr_attn_loc', 'match_attr_attn_over_mean',
+    #                'avg_attr_attn', 'attr_attn_3_last', 'attr_attn_last_1',
+    #                'attr_attn_last_2', 'attr_attn_last_3',
+    #                'avg_attr_attn_3_last', 'avg_attr_attn_last_1',
+    #                'avg_attr_attn_last_2', 'avg_attr_attn_last_3']
+    plot_params = ['attr_attn_3_last', 'match_attr_attn_loc', 'match_attr_attn_over_mean',
+                   'avg_attr_attn', 'attr_attn_last_1',
+                   'attr_attn_last_2', 'attr_attn_last_3']
+    plot_params = ['match_attr_attn_over_mean']
 
-        # plot_params = ['match_attr_attn_loc', 'match_attr_attn_over_mean',
-        #                'avg_attr_attn', 'attr_attn_3_last', 'attr_attn_last_1',
-        #                'attr_attn_last_2', 'attr_attn_last_3',
-        #                'avg_attr_attn_3_last', 'avg_attr_attn_last_1',
-        #                'avg_attr_attn_last_2', 'avg_attr_attn_last_3']
-        plot_params = ['attr_attn_3_last', 'match_attr_attn_loc', 'match_attr_attn_over_mean',
-                       'avg_attr_attn', 'attr_attn_last_1',
-                       'attr_attn_last_2', 'attr_attn_last_3']
-        plot_params = ['match_attr_attn_over_mean']
+    # aggregation
+    agg_fns = None
+    target_agg_result_ids = None
+    # agg_fns = ['row_mean', 'row_std']
+    # target_agg_result_ids = ['match_attr_attn_loc']
 
-        # aggregation
-        agg_fns = None
-        target_agg_result_ids = None
-        # agg_fns = ['row_mean', 'row_std']
-        # target_agg_result_ids = ['match_attr_attn_loc']
+    categories = ['all']
 
-        categories = ['all']
+    if analysis_target == 'use_case':
 
-        if analysis_target == 'use_case':
+        if analysis_type == 'simple':
+            use_case_analysis(conf, plot_params, categories, agg_fns, target_agg_result_ids)
 
-            if analysis_type == 'simple':
-                use_case_analysis(conf, plot_params, categories, agg_fns, target_agg_result_ids)
-
-            elif analysis_type == 'comparison':
-                # comparison_params = ['tok']
-                comparison_params = ['fine_tune_method']
-                confs = conf_creator.get_confs(conf, comparison_params)
-                use_case_comparison_analysis(confs, plot_params, categories)
-
-            else:
-                raise NotImplementedError()
-
-        elif analysis_target == 'benchmark':
-
-            bench_conf = conf.copy()
-            bench_conf['use_case'] = conf_creator.conf_template['use_case']
-
-            if analysis_type == 'simple':
-
-                benchmark_analysis(bench_conf, plot_params, categories, agg_fns, target_agg_result_ids)
-
-            elif analysis_type == 'comparison':
-                # comparison_params = ['tok']
-                comparison_params = ['fine_tune_method']
-                bench_confs = conf_creator.get_confs(bench_conf, comparison_params)
-
-                benchmark_comparison_analysis(bench_confs, plot_params, categories, agg_fns, target_agg_result_ids)
-
-            else:
-                raise NotImplementedError()
+        elif analysis_type == 'comparison':
+            # comparison_params = ['tok']
+            comparison_params = ['fine_tune_method']
+            confs = conf_creator.get_confs(conf, comparison_params)
+            use_case_comparison_analysis(confs, plot_params, categories)
 
         else:
             raise NotImplementedError()
+
+    elif analysis_target == 'benchmark':
+
+        bench_conf = conf.copy()
+        bench_conf['use_case'] = conf_creator.conf_template['use_case']
+
+        if analysis_type == 'simple':
+
+            benchmark_analysis(bench_conf, plot_params, categories, agg_fns, target_agg_result_ids)
+
+        elif analysis_type == 'comparison':
+            # comparison_params = ['tok']
+            comparison_params = ['fine_tune_method']
+            bench_confs = conf_creator.get_confs(bench_conf, comparison_params)
+
+            benchmark_comparison_analysis(bench_confs, plot_params, categories, agg_fns, target_agg_result_ids)
+
+        else:
+            raise NotImplementedError()
+
+    else:
+        raise NotImplementedError()

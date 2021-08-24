@@ -1,14 +1,14 @@
-from attention.extractors import AttentionExtractor, AttributeAttentionExtractor
+from core.attention.extractors import AttentionExtractor, AttributeAttentionExtractor
 from utils.general import get_dataset, get_model, get_sample
 import os
 from pathlib import Path
-from attention.attention_flow import AttentionGraphExtractor, AttentionGraphUtils, AggregateAttributeAttentionGraph
+from core.attention.attention_flow import AttentionGraphExtractor, AttentionGraphUtils, AggregateAttributeAttentionGraph
 import pickle
 from multiprocessing import Process
 import matplotlib.pyplot as plt
 
 
-PROJECT_DIR = Path(__file__).parent.parent
+PROJECT_DIR = Path(__file__).parent.parent.parent
 MODELS_DIR = os.path.join(PROJECT_DIR, 'results', 'models')
 RESULTS_DIR = os.path.join(PROJECT_DIR, 'results', 'attention_flow')
 

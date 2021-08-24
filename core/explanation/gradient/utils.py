@@ -1,5 +1,5 @@
 import pandas as pd
-from explanation.gradient.extractors import EntityGradientExtractor
+from core.explanation.gradient.extractors import EntityGradientExtractor
 import numpy as np
 
 
