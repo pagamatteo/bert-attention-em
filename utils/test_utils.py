@@ -12,7 +12,7 @@ class ConfCreator(object):
             'model_name': ['bert-base-uncased'],
             'tok': ['attr_pair', 'sent_pair'],
             'size': [None],
-            'fine_tune_method': ['simple', None], # ['advanced', 'simple', None],
+            'fine_tune_method': [None, 'simple'],   # ['advanced', 'simple', None],
             'extractor': {
                 'attn_extractor': ['attr_extractor', 'word_extractor'],
                 'attn_extr_params': ['special_tokens', 'agg_metric'],

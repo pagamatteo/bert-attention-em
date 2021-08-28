@@ -208,7 +208,7 @@ class GenericAttributeAttentionTest(object):
 
     def plot(self, res_collector: TestResultCollector, plot_params: list = None,
              out_dir=None, out_file_name_prefix=None, title_prefix=None, ax=None, labels=None,
-             vmin=0, vmax=1):
+             vmin=0, vmax=1, plot_type='simple'):
 
         assert isinstance(res_collector, TestResultCollector), "Wrong data type for parameter 'res_collector'."
         result = res_collector.get_results()
@@ -218,6 +218,8 @@ class GenericAttributeAttentionTest(object):
             assert len(plot_params) > 0
             for plot_param in plot_params:
                 assert plot_param in result
+        assert isinstance(plot_type, str)
+        assert plot_type in ['simple', 'advanced']
 
         for param, score in result.items():
 
@@ -225,46 +227,51 @@ class GenericAttributeAttentionTest(object):
                 if param not in plot_params:
                     continue
 
-            if ax is None:
-                fig, new_ax = plt.subplots(figsize=(10, 5))
-                title = param
-                if title_prefix is not None:
-                    title = f'{title_prefix}_{title}'
-                fig.suptitle(title)
+            if '_loc' not in param and plot_type == 'advanced':
+                map = ConfCreator().use_case_map
+                assert out_file_name_prefix is not None
+                plot_left_to_right_heatmap(score, vmin=vmin, vmax=vmax, title=map[title_prefix], is_annot=True,
+                                           out_file_name=f'{out_file_name_prefix}_{param}.png')
 
-                # # only for test
-                # map = ConfCreator().use_case_map
-                # plot_left_to_right_heatmap(score, vmin=vmin, vmax=vmax, title=map[title_prefix], is_annot=True,
-                #                            out_file_name=f'{title_prefix}.png')
             else:
-                new_ax = ax
-
-            assert new_ax is not None
-
-            _ = sns.heatmap(score, annot=True, fmt='.1f', ax=new_ax, vmin=vmin, vmax=vmax)
-            ylabel = 'layers'
-            xlabel = 'heads'
-            if param in self.property_mask_res:
-                xlabel, ylabel = 'attributes', 'attributes'
-
-            new_ax.set_xlabel(xlabel)
-
-            if labels:
-                new_ax.set_ylabel(ylabel)
-            else:
-                new_ax.set_yticks([])
-
-            if out_dir is not None:
-                if out_file_name_prefix is not None:
-                    out_plot_file_name = '{}_{}.pdf'.format(out_file_name_prefix, param)
-                else:
-                    out_plot_file_name = '{}.pdf'.format(param)
 
                 if ax is None:
-                    plt.savefig(os.path.join(out_dir, out_plot_file_name), bbox_inches='tight')
+                    fig, new_ax = plt.subplots(figsize=(10, 5))
+                    title = param
+                    if title_prefix is not None:
+                        title = f'{title_prefix}_{title}'
+                    fig.suptitle(title)
 
-            if ax is None:
-                plt.show()
+                else:
+                    new_ax = ax
+
+                assert new_ax is not None
+
+                score = score.mean(axis=1).reshape((-1, 1))
+                _ = sns.heatmap(score, annot=True, fmt='.1f', ax=new_ax, vmin=vmin, vmax=vmax)
+                ylabel = 'layers'
+                xlabel = 'heads'
+                if param in self.property_mask_res:
+                    xlabel, ylabel = 'attributes', 'attributes'
+
+                new_ax.set_xlabel(xlabel)
+
+                if labels:
+                    new_ax.set_ylabel(ylabel)
+                else:
+                    new_ax.set_yticks([])
+
+                if out_dir is not None:
+                    if out_file_name_prefix is not None:
+                        out_plot_file_name = '{}_{}.pdf'.format(out_file_name_prefix, param)
+                    else:
+                        out_plot_file_name = '{}.pdf'.format(param)
+
+                    if ax is None:
+                        plt.savefig(os.path.join(out_dir, out_plot_file_name), bbox_inches='tight')
+
+                if ax is None:
+                    plt.show()
 
     def plot_comparison(self, res_coll1: TestResultCollector, res_coll2: TestResultCollector,
                         cmp_res_coll: TestResultCollector, plot_params: list = None, out_dir=None,

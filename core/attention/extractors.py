@@ -4,6 +4,7 @@ import torch
 from core.data_models.em_dataset import EMDataset
 from tqdm import tqdm
 import unicodedata
+from utils.bert_utils import tokenize_entity_pair
 
 
 class AttentionExtractor(object):
@@ -45,7 +46,8 @@ class AttentionExtractor(object):
         assert isinstance(f['tokens'], list), err_msg
         if f['attns'] is not None:
             assert isinstance(f['attns'], (tuple, np.ndarray)), err_msg
-        assert isinstance(f['preds'], torch.Tensor), err_msg
+        if f['preds'] is not None:
+            assert isinstance(f['preds'], torch.Tensor), err_msg
 
     @staticmethod
     def check_batch_attn_features(batch_attn_features: list):
@@ -124,10 +126,17 @@ class WordAttentionExtractor(AttentionExtractor):
         self.max_len = dataset.max_len
         self.tokenization = dataset.tokenization
         self.special_tokens = False
+        self.agg_metric = 'mean'
+        self.available_agg_metrics = ['mean', 'max']
         if kwargs is not None:
             if 'special_tokens' in kwargs:
                 assert isinstance(kwargs['special_tokens'], bool)
                 self.special_tokens = kwargs['special_tokens']
+
+            if 'agg_metric' in kwargs:
+                assert isinstance(kwargs['agg_metric'], str)
+                assert kwargs['agg_metric'] in self.available_agg_metrics
+                self.agg_metric = kwargs['agg_metric']
 
     @staticmethod
     def check_attn_features(attn_features: tuple):
@@ -185,7 +194,10 @@ class WordAttentionExtractor(AttentionExtractor):
         # order to obtain for each word its word attentions
         word_to_word_attn = np.empty((len(word_idxs), len(word_idxs)))
         for idx, (word_start, word_end) in enumerate(word_idxs):
-            word_to_word_attn[idx, :] = word_to_token_attn[word_start:word_end, :].mean(0)
+            if self.agg_metric == 'mean':
+                word_to_word_attn[idx, :] = word_to_token_attn[word_start:word_end, :].mean(0)
+            else:
+                word_to_word_attn[idx, :] = word_to_token_attn[word_start:word_end, :].max(0)
 
         # normalize the attention scores by columns to make them to sum to 1 (as the
         # original softmax)
@@ -198,7 +210,7 @@ class WordAttentionExtractor(AttentionExtractor):
 
         return word_to_word_attn
 
-    def _get_sent_word_idxs(self, offsets: list):
+    def _get_sent_word_idxs(self, offsets: list, sent):
 
         assert isinstance(offsets, list), "Wrong data type for parameter 'offsets'."
         assert len(offsets) > 0, "No offsets provided."
@@ -215,7 +227,7 @@ class WordAttentionExtractor(AttentionExtractor):
 
             # special tokens (e.g., [CLS], [SEP]) do not refer to any words
             # their offsets are equal to (0, 0)
-            if token_offsets == [0, 0]:
+            if token_offsets == [0, 0] or (sent[token_offsets[0]: token_offsets[1]] == '[SEP]' and self.special_tokens is False):
 
                 # save all the tokens that refer to the previous word
                 if len(tokens_in_word) > 0:
@@ -255,21 +267,21 @@ class WordAttentionExtractor(AttentionExtractor):
 
         return words_offsets
 
-    def _get_pair_sent_word_idxs(self, encoded_pair_sent):
+    def _get_pair_sent_word_idxs(self, encoded_pair_sent, sent1, sent2):
 
         assert 'offset_mapping' in encoded_pair_sent, "'encoded_pair_sent' doesn't include the 'offset_mapping' param."
 
-        # split the offset mappings at sentence level by exploting the [SEP] which
+        # split the offset mappings at sentence level by exploiting the [SEP] which
         # is identified with the offsets [0, 0] (as any other special tokens)
         offsets = encoded_pair_sent['offset_mapping'].squeeze(0).tolist()
         sep_idx = offsets[1:].index([0, 0])  # ignore the [CLS] token at the index 0
         left_offsets = offsets[:sep_idx + 2]
         right_offsets = offsets[sep_idx + 1:]
 
-        left_word_idxs = self._get_sent_word_idxs(left_offsets)
+        left_word_idxs = self._get_sent_word_idxs(left_offsets, sent1)
         if self.special_tokens:
             left_word_idxs = [(0, 1)] + left_word_idxs + [(left_word_idxs[-1][1], left_word_idxs[-1][1] + 1)]
-        right_word_idxs = self._get_sent_word_idxs(right_offsets)
+        right_word_idxs = self._get_sent_word_idxs(right_offsets, sent2)
         right_word_idxs = [(item[0] + sep_idx + 1, item[1] + sep_idx + 1) for item in right_word_idxs]
         if self.special_tokens:
             right_word_idxs += [(right_word_idxs[-1][1], right_word_idxs[-1][1] + 1)]
@@ -283,16 +295,27 @@ class WordAttentionExtractor(AttentionExtractor):
                 return ''.join(c for c in unicodedata.normalize('NFD', s) if unicodedata.category(c) != 'Mn')
 
             word_idxs = [left_word_idxs, right_word_idxs]
-            if len(sent1.split()) + len(sent2.split()) > len(left_word_idxs) + len(right_word_idxs):
-                if self.special_tokens:
-                    sent1 = ' '.join(sent1.split()[:len(left_word_idxs) - 2])
-                    sent2 = ' '.join(sent2.split()[:len(right_word_idxs) - 1])
-                else:
-                    sent1 = ' '.join(sent1.split()[:len(left_word_idxs)])
-                    sent2 = ' '.join(sent2.split()[:len(right_word_idxs)])
 
-            original_sent1 = strip_accents(sent1).lower().replace("[unk]", "[UNK]")
-            original_sent2 = strip_accents(sent2).lower().replace("[unk]", "[UNK]")
+            if self.special_tokens:
+                sent1 = f'[CLS] {sent1} [SEP]'
+                sent2 = f'{sent2} [SEP]'
+
+            else:
+                sent1 = sent1.replace("[SEP] ", "")
+                sent2 = sent2.replace("[SEP] ", "")
+
+            truncation = False
+            if len(sent1.split()) + len(sent2.split()) > len(left_word_idxs) + len(right_word_idxs):    # truncation
+                truncation = True
+                # if self.special_tokens:
+                #     sent1 = ' '.join(sent1.split()[:len(left_word_idxs) - 2])
+                #     sent2 = ' '.join(sent2.split()[:len(right_word_idxs) - 1])
+                # else:
+                sent1 = ' '.join(sent1.split()[:len(left_word_idxs)])
+                sent2 = ' '.join(sent2.split()[:len(right_word_idxs)])
+
+            original_sent1 = strip_accents(sent1).lower().replace("[unk]", "[UNK]").replace("[sep]", "[SEP]").replace("[cls]", "[CLS]")
+            original_sent2 = strip_accents(sent2).lower().replace("[unk]", "[UNK]").replace("[sep]", "[SEP]").replace("[cls]", "[CLS]")
             restore_sents = ["", ""]
             for r_idx in range(len(word_idxs)):
                 for r in word_idxs[r_idx]:
@@ -302,10 +325,15 @@ class WordAttentionExtractor(AttentionExtractor):
                             item += a
                         else:
                             item += a.replace("#", "")
-                    if item != '[CLS]' and item != '[SEP]':
-                        restore_sents[r_idx] += f'{item} '
+                    # if item != '[CLS]' and item != '[SEP]':
+                    restore_sents[r_idx] += f'{item} '
             restore_sents[0] = restore_sents[0][:-1]
             restore_sents[1] = restore_sents[1][:-1]
+            if truncation:
+                if restore_sents[0].endswith('[SEP]') and not original_sent1.endswith('[SEP]'):
+                    restore_sents[0] = restore_sents[0][:-6]
+                if restore_sents[1].endswith('[SEP]') and not original_sent2.endswith('[SEP]'):
+                    restore_sents[1] = restore_sents[1][:-6]
             first_left = original_sent1
             first_right = original_sent2
             attempts = 0
@@ -333,38 +361,119 @@ class WordAttentionExtractor(AttentionExtractor):
                 raise ValueError("Original sentences and restore sentences don't match.")
             print()
 
-            if self.special_tokens:
-                restore_sents[0] = f'[CLS] {restore_sents[0]} [SEP]'
-                restore_sents[1] = f'{restore_sents[1]} [SEP]'
+            # if self.special_tokens:
+            #     restore_sents[0] = f'[CLS] {restore_sents[0]} [SEP]'
+            #     restore_sents[1] = f'{restore_sents[1]} [SEP]'
 
-            return restore_sents[0].split(), restore_sents[1].split()
+            return restore_sents[0].split(), restore_sents[1].split(), truncation
 
-        sent1 = ""
-        sent2 = ""
-        for attr, attr_val in left_entity.iteritems():
-            sent1 += "{} ".format(str(attr_val))
-        for attr, attr_val in right_entity.iteritems():
-            sent2 += "{} ".format(str(attr_val))
-        sent1 = sent1[:-1]
-        sent2 = sent2[:-1]
-        # n_words = len(sent1.split()) + len(sent2.split())
+            # word_idxs = [left_word_idxs, right_word_idxs]
+            # if len(sent1.split()) + len(sent2.split()) > len(left_word_idxs) + len(right_word_idxs):
+            #     if self.special_tokens:
+            #         sent1 = ' '.join(sent1.split()[:len(left_word_idxs) - 2])
+            #         sent2 = ' '.join(sent2.split()[:len(right_word_idxs) - 1])
+            #     else:
+            #         sent1 = ' '.join(sent1.split()[:len(left_word_idxs)])
+            #         sent2 = ' '.join(sent2.split()[:len(right_word_idxs)])
+            #
+            # original_sent1 = strip_accents(sent1).lower().replace("[unk]", "[UNK]")
+            # original_sent2 = strip_accents(sent2).lower().replace("[unk]", "[UNK]")
+            # restore_sents = ["", ""]
+            # for r_idx in range(len(word_idxs)):
+            #     for r in word_idxs[r_idx]:
+            #         item = ""
+            #         for a in tokens[r[0]:r[1]]:
+            #             if a == '#':
+            #                 item += a
+            #             else:
+            #                 item += a.replace("#", "")
+            #         if item != '[CLS]' and item != '[SEP]':
+            #             restore_sents[r_idx] += f'{item} '
+            # restore_sents[0] = restore_sents[0][:-1]
+            # restore_sents[1] = restore_sents[1][:-1]
+            # first_left = original_sent1
+            # first_right = original_sent2
+            # attempts = 0
+            # num_attempts = 15
+            # while original_sent1 != restore_sents[0] and original_sent2 != restore_sents[1]:
+            #     print(f"TRUNCATION#{attempts}")
+            #     if original_sent1 != restore_sents[0]:
+            #         original_sent1 = original_sent1[:-1]
+            #     if original_sent2 != restore_sents[1]:
+            #         original_sent2 = original_sent2[:-1]
+            #     attempts += 1
+            #
+            #     if attempts == num_attempts:
+            #         break
+            #
+            # if attempts == num_attempts:
+            #     print("LEFT")
+            #     print(original_sent1)
+            #     print(first_left)
+            #     print(restore_sents[0])
+            #     print("RIGHT")
+            #     print(original_sent2)
+            #     print(first_right)
+            #     print(restore_sents[1])
+            #     raise ValueError("Original sentences and restore sentences don't match.")
+            # print()
+            #
+            # if self.special_tokens:
+            #     restore_sents[0] = f'[CLS] {restore_sents[0]} [SEP]'
+            #     restore_sents[1] = f'{restore_sents[1]} [SEP]'
+            #
+            # return restore_sents[0].split(), restore_sents[1].split()
 
-        encoded = self.tokenizer(sent1, sent2, padding='max_length', truncation=True,
-                                 return_tensors="pt", max_length=self.max_len,
-                                 add_special_tokens=True, pad_to_max_length=True,
-                                 return_attention_mask=False,
-                                 return_offsets_mapping=True)
+        flat_features = tokenize_entity_pair(left_entity, right_entity, self.tokenizer, self.tokenization, self.max_len,
+                                             return_offset=True)
+        sent1 = flat_features['sent1']
+        sent2 = flat_features['sent2']
+        encoded = {}
+        for f in flat_features:
+            if f not in ['sent1', 'sent2']:
+                encoded[f] = flat_features[f].unsqueeze(0)
 
-        left_word_idxs, right_word_idxs = self._get_pair_sent_word_idxs(encoded)
-        left_out_words, right_out_words = check_word_idxs_consistency(sent1, sent2, tokens, left_word_idxs,
-                                                                      right_word_idxs)
+        # sent1 = ""
+        # sent2 = ""
+        # for attr, attr_val in left_entity.iteritems():
+        #     sent1 += "{} ".format(str(attr_val))
+        # for attr, attr_val in right_entity.iteritems():
+        #     sent2 += "{} ".format(str(attr_val))
+        # sent1 = sent1[:-1]
+        # sent2 = sent2[:-1]
+        # # n_words = len(sent1.split()) + len(sent2.split())
+        #
+        # encoded = self.tokenizer(sent1, sent2, padding='max_length', truncation=True,
+        #                          return_tensors="pt", max_length=self.max_len,
+        #                          add_special_tokens=True, pad_to_max_length=True,
+        #                          return_attention_mask=False,
+        #                          return_offsets_mapping=True)
+
+        left_word_idxs, right_word_idxs = self._get_pair_sent_word_idxs(encoded, sent1, sent2)
+
+        if self.special_tokens:
+            sent1 = f'[CLS] {sent1} [SEP]'
+            sent2 = f'{sent2} [SEP]'
+
+        else:
+            sent1 = sent1.replace("[SEP] ", "")
+            sent2 = sent2.replace("[SEP] ", "")
+
+        truncation = False
+        if len(sent1.split()) + len(sent2.split()) > len(left_word_idxs) + len(right_word_idxs):  # truncation
+            truncation = True
+
+        # left_out_words, right_out_words, truncation = check_word_idxs_consistency(sent1, sent2, tokens, left_word_idxs,
+        #                                                               right_word_idxs)
+
         # if self.special_tokens:
         #     out_words = ['[CLS]'] + left_out_words + ['[SEP]'] + right_out_words + ['[SEP]']
         # else:
         #     out_words = left_out_words + right_out_words
-        out_words = left_out_words + right_out_words
+        # out_words = left_out_words + right_out_words
+        out_words = sent1.split() + sent2.split()
 
-        return left_word_idxs, right_word_idxs, out_words
+        return left_word_idxs, right_word_idxs, out_words, truncation
 
     def _get_word_attn(self, left_entity: pd.Series, right_entity: pd.Series,
                        features: dict):
@@ -383,24 +492,29 @@ class WordAttentionExtractor(AttentionExtractor):
         n_layers = len(attns)
         n_heads = attns[0].shape[1]
 
-        if self.tokenization == 'sent_pair':
-            left_word_idxs, right_word_idxs, out_words = self._get_sent_pair_idxs(left_entity, right_entity,
-                                                                                  features['tokens'])
+        if self.tokenization in ['sent_pair', 'attr_pair']:
+            left_word_idxs, right_word_idxs, out_words, truncation = self._get_sent_pair_idxs(left_entity, right_entity,
+                                                                                              features['tokens'])
+
         else:
             raise NotImplementedError()
 
-        word_attns = np.empty((n_layers, n_heads, len(out_words), len(out_words)))
-        for layer in range(n_layers):
-            heads = attns[layer].squeeze(0)
-            for head in range(n_heads):
-                head_attn = heads[head]
-                word_attns[layer, head, :, :] = self._get_head_word_attn(head_attn, left_word_idxs, right_word_idxs)
+        if not truncation:
+            word_attns = np.empty((n_layers, n_heads, len(out_words), len(out_words)))
+            for layer in range(n_layers):
+                heads = attns[layer].squeeze(0)
+                for head in range(n_heads):
+                    head_attn = heads[head]
+                    word_attns[layer, head, :, :] = self._get_head_word_attn(head_attn, left_word_idxs, right_word_idxs)
+
+            assert word_attns.shape[2] == len(out_words)
+
+        else:
+            word_attns = None
 
         # override word-piece-level with word-level attention maps
         features['attns'] = word_attns
         features['text_units'] = out_words
-
-        assert word_attns.shape[2] == len(out_words)
 
         return left_entity, right_entity, features
 
@@ -766,15 +880,16 @@ class AttributeAttentionExtractor(AttentionExtractor):
         assert valid_token_type_ids[sent_split_idx:].sum() == len(valid_token_type_ids) - sent_split_idx
 
         left_tokens = np.array(tokens[:sent_split_idx])
-        right_tokens = np.array(['[CLS]'] + tokens[sent_split_idx:])  # add fake [CLS] token only for alignment
+        # right_tokens = np.array(['[CLS]'] + tokens[sent_split_idx:])  # add fake [CLS] token only for alignment
+        right_tokens = np.array(tokens[sent_split_idx:])
 
         # get attribute indexes from the left entity
         left_idxs, left_trunc = self._get_attr_idxs(len(left_entity), left_tokens)
         left_last_idx = None
         if left_idxs is not None:
             left_last_idx = left_idxs[-1][1]
-            if self.special_tokens:
-                left_last_idx -= 1
+            # if self.special_tokens:
+            #    left_last_idx -= 1
 
         # get attribute indexes from the right entity
         right_idxs, right_trunc = self._get_attr_idxs(len(right_entity),

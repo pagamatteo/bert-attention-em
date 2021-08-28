@@ -234,7 +234,8 @@ def get_entity_pair_attr_idxs(left_entity: pd.Series, right_entity: pd.Series, t
     return out_data
 
 
-def tokenize_entity_pair(entity1: pd.Series, entity2: pd.Series, tokenizer, tokenize_method: str, max_len: int):
+def tokenize_entity_pair(entity1: pd.Series, entity2: pd.Series, tokenizer, tokenize_method: str, max_len: int,
+                         return_offset: bool = False):
 
     assert isinstance(entity1, pd.Series), "Wrong data type for param 'entity1'."
     assert isinstance(entity2, pd.Series), "Wrong data type for param 'entity2'."
@@ -251,7 +252,7 @@ def tokenize_entity_pair(entity1: pd.Series, entity2: pd.Series, tokenizer, toke
         # Tokenize the text pairs
         features = tokenizer(sent1, sent2, padding='max_length', truncation=True, return_tensors="pt",
                              max_length=max_len, add_special_tokens=True, pad_to_max_length=True,
-                             return_attention_mask=True)
+                             return_attention_mask=True, return_offsets_mapping=return_offset)
 
     elif tokenize_method == 'attr':
         sent = ""
@@ -261,7 +262,8 @@ def tokenize_entity_pair(entity1: pd.Series, entity2: pd.Series, tokenizer, toke
             sent += "{} [SEP] ".format(str(attr_val))
         sent = sent[:-7]  # remove last ' [SEP] '
         features = tokenizer(sent, padding='max_length', truncation=True, return_tensors="pt", max_length=max_len,
-                             add_special_tokens=True, pad_to_max_length=True, return_attention_mask=True)
+                             add_special_tokens=True, pad_to_max_length=True, return_attention_mask=True,
+                             return_offsets_mapping=return_offset)
         sent1 = sent[:]
         sent2 = None
 
@@ -278,7 +280,7 @@ def tokenize_entity_pair(entity1: pd.Series, entity2: pd.Series, tokenizer, toke
 
         features = tokenizer(sent1, sent2, padding='max_length', truncation=True, return_tensors="pt",
                              max_length=max_len, add_special_tokens=True, pad_to_max_length=True,
-                             return_attention_mask=True)
+                             return_attention_mask=True, return_offsets_mapping=return_offset)
 
     else:
         raise ValueError("Wrong tokenization method.")

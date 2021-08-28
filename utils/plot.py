@@ -54,7 +54,8 @@ def plot_layers_heads_attention(attns, mask=None, out_file_name: str = None):
     plt.show()
 
 
-def plot_results(results, tester, target_cats=None, plot_params=None, vmin=0, vmax=1):
+def plot_results(results, tester, target_cats=None, plot_params=None, vmin=0, vmax=1, plot_type='simple',
+                 save_path=None):
     assert isinstance(results, dict)
     if target_cats is not None:
         assert isinstance(target_cats, list)
@@ -83,7 +84,8 @@ def plot_results(results, tester, target_cats=None, plot_params=None, vmin=0, vm
             print(cat)
             assert isinstance(cat_res, TestResultCollector)
 
-            tester.plot(cat_res, plot_params=plot_params, labels=True, vmin=vmin, vmax=vmax, title_prefix=use_case)
+            tester.plot(cat_res, plot_params=plot_params, labels=True, vmin=vmin, vmax=vmax, title_prefix=use_case,
+                        plot_type=plot_type, out_file_name_prefix=save_path)
 
 
 def plot_comparison(res1, res2, cmp_res, tester, cmp_vals, target_cats=None, plot_params=None):
@@ -187,14 +189,51 @@ def plot_benchmark_results(results, tester, use_cases, target_cats=None, plot_pa
             # plt.savefig("avg_attn.pdf", bbox_inches='tight')
 
 
+def plot_compared_results(res1, res2, diff_res, res1_name, res2_name, out_file_name=None):
+    max_score = np.max([np.max(res1), np.max(res2)])
+    fig, axes = plt.subplots(1, 3, figsize=(10, 5))
+    cbar_ax = fig.add_axes([.91, 0.11, .03, .77])
+    cbar_ax.tick_params(labelsize=16)
+    axes[0].set_title(res1_name, fontdict={'fontsize': 16})
+    if res1.ndim == 1:
+        res1 = res1.reshape(-1, 1)
+    h = sns.heatmap(res1, annot=True, ax=axes[0], vmax=max_score, vmin=0, yticklabels=range(1, len(res1) + 1),
+                    xticklabels=False, cbar=True, cbar_ax=cbar_ax, annot_kws={"size": 14})
+    h.set_yticklabels(h.get_yticklabels(), fontsize=16, rotation=0)
+    axes[0].set_ylabel('layers', fontsize=14)
+    axes[1].set_title(res2_name, fontdict={'fontsize': 16})
+    if res2.ndim == 1:
+        res2 = res2.reshape(-1, 1)
+    sns.heatmap(res2, annot=True, ax=axes[1], vmax=max_score, vmin=0, xticklabels=False, yticklabels=False, cbar=False,
+                cbar_ax=None, annot_kws={"size": 14})
+    axes[2].set_title("Diff", fontdict={'fontsize': 16})
+    if diff_res.ndim == 1:
+        diff_res = diff_res.reshape(-1, 1)
+    sns.heatmap(diff_res, annot=True, ax=axes[2], vmax=max_score, vmin=0, xticklabels=False, yticklabels=False,
+                cbar=False, cbar_ax=None, annot_kws={"size": 14})
+    plt.subplots_adjust(wspace=0.2)
+
+    if out_file_name is not None:
+        plt.savefig(out_file_name, bbox_inches='tight')
+
+    plt.show()
+
+
 def plot_agg_results(results, target_cats=None, title_prefix=None, xlabel=None, ylabel=None,
-                     xticks=None, yticks=None, agg=False, vmin=0, vmax=0.5):
+                     xticks=None, yticks=None, agg=False, vmin=0, vmax=0.5, plot_type='simple', save_path=None,
+                     res1=None, res2=None, res1_name=None, res2_name=None):
     assert isinstance(results, dict)
     if target_cats is not None:
         assert isinstance(target_cats, list)
         assert len(target_cats) > 0
     if title_prefix is not None:
         assert isinstance(title_prefix, str)
+    if res1 is not None:
+        assert res2 is not None
+        assert res1_name is not None
+    if res2 is not None:
+        assert res1 is not None
+        assert res2_name is not None
 
     for cat in results:
 
@@ -213,26 +252,42 @@ def plot_agg_results(results, target_cats=None, title_prefix=None, xlabel=None, 
             assert len(cat_res[metric]) == 1
             res_id = list(cat_res[metric].keys())[0]
 
-            figsize = (20, 10)
-            if cat_res[metric][res_id].shape[1] < 3:
-                figsize = (6, 10)
-            fig, ax = plt.subplots(figsize=figsize)
+            if res1 is None:
+                figsize = (20, 10)
+                if cat_res[metric][res_id].shape[1] < 3:
+                    figsize = (6, 10)
+                fig, ax = plt.subplots(figsize=figsize)
 
-            title = f'{res_id} {metric}'
-            if title_prefix is not None:
-                title = f'{title_prefix} {title}'
-            fig.suptitle(title)
+                title = f'{res_id} {metric}'
+                if title_prefix is not None:
+                    title = f'{title_prefix} {title}'
+                fig.suptitle(title)
 
-            sns.heatmap(cat_res[metric][res_id], annot=True, fmt='.2f', vmin=vmin, vmax=vmax,
-                        xticklabels=xticks, ax=ax)
-            plt.show()
+                sns.heatmap(cat_res[metric][res_id], annot=True, fmt='.2f', vmin=vmin, vmax=vmax,
+                            xticklabels=xticks, ax=ax)
+                plt.show()
+
+            else:
+                if not agg:
+                    res1_cat = res1[cat][metric][res_id]
+                    res2_cat = res2[cat][metric][res_id]
+                    diff_res = cat_res[metric][res_id]
+                    plot_compared_results(res1_cat, res2_cat, diff_res, res1_name, res2_name, out_file_name=save_path)
 
             if agg:
-                fig, ax = plt.subplots(figsize=(5, 4))
-                fig.suptitle(f'{res_id} {metric} agg')
-                sns.heatmap(cat_res[metric][res_id].mean(1).reshape((-1, 1)), annot=True,
-                            fmt='.2f', vmin=vmin, vmax=vmax, ax=ax)
-                plt.show()
+                if res1 is None:
+                    fig, ax = plt.subplots(figsize=(5, 4))
+                    fig.suptitle(f'{res_id} {metric} agg')
+                    sns.heatmap(cat_res[metric][res_id].mean(1).reshape((-1, 1)), annot=True,
+                                fmt='.2f', vmin=vmin, vmax=vmax, ax=ax)
+                    plt.show()
+
+                else:
+                    res1_cat_agg = res1[cat][metric][res_id].mean(1).reshape((-1, 1))
+                    res2_cat_agg = res2[cat][metric][res_id].mean(1).reshape((-1, 1))
+                    diff_res_agg = cat_res[metric][res_id].mean(1).reshape((-1, 1))
+                    plot_compared_results(res1_cat_agg, res2_cat_agg, diff_res_agg, res1_name, res2_name,
+                                          out_file_name=save_path)
 
 
 def plot_left_to_right_heatmap(data: np.ndarray, vmin: (int, float), vmax: (int, float), title: str = None,
@@ -278,5 +333,21 @@ def plot_left_to_right_heatmap(data: np.ndarray, vmin: (int, float), vmax: (int,
 
     if out_file_name is not None:
         plt.savefig(out_file_name, bbox_inches='tight')
+
+    plt.show()
+
+
+def plot_images_grid(imgs, nrows=3, ncols=4, save_path=None):
+    fig, axes = plt.subplots(nrows, ncols, figsize=(24, 12))
+    for i in range(len(imgs)):
+        ax = axes[i // ncols][i % ncols]
+        ax.imshow(imgs[i])
+        ax.set_axis_off()
+        ax.autoscale(False)
+    plt.subplots_adjust(top=1, bottom=0, right=1, left=0,
+                        hspace=0, wspace=0)
+
+    if save_path is not None:
+        plt.savefig(save_path, bbox_inches='tight')
 
     plt.show()

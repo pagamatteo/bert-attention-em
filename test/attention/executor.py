@@ -168,14 +168,14 @@ if __name__ == '__main__':
         'data_type': ['train'],  #['train', 'test'],
         'permute': [False],
         'model_name': ['bert-base-uncased'],
-        'tok': ['sent_pair'],  # 'sent_pair', 'attr', 'attr_pair'
+        'tok': ['attr_pair'],  # 'sent_pair', 'attr', 'attr_pair'
         'size': [None],
         'target_class': ['both'],  # 'both', 0, 1
-        'fine_tune_method': ['simple'],  # None, 'simple', 'advanced'
+        'fine_tune_method': [None],  # None, 'simple', 'advanced'
         'extractor': [
             {
                 'attn_extractor': 'attr_extractor',     # word_extractor
-                'attn_extr_params': {'special_tokens': True, 'agg_metric': 'mean'},
+                'attn_extr_params': {'special_tokens': True, 'agg_metric': 'max'},
             }
         ],
         'tester': [

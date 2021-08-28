@@ -3,11 +3,13 @@ import pickle
 import copy
 import numpy as np
 from pathlib import Path
+import matplotlib.image as mpimg
 
 from utils.result_collector import TestResultCollector
-from utils.plot import plot_results, plot_benchmark_results, plot_agg_results, plot_comparison
+from utils.plot import plot_results, plot_benchmark_results, plot_agg_results, plot_comparison, plot_images_grid
 from utils.test_utils import ConfCreator
 from utils.general import get_testers
+
 
 
 PROJECT_DIR = Path(__file__).parent.parent.parent
@@ -204,7 +206,7 @@ def cmp_agg_results(res1, res2, target_cats):
 
 
 def use_case_analysis(conf: dict, plot_params: list, categories: list, agg_fns: list = None,
-                                  target_agg_result_ids: list = None):
+                                  target_agg_result_ids: list = None, plot_type: str = 'simple', save_path: str = None):
 
     assert isinstance(conf, dict), "Wrong data type for parameter 'conf'."
     assert isinstance(plot_params, list), "Wrong data type for parameter 'plot_params'."
@@ -223,13 +225,16 @@ def use_case_analysis(conf: dict, plot_params: list, categories: list, agg_fns: 
     if agg_fns is not None:
         res = aggregate_results(res, agg_fns, target_agg_result_ids)
         display_uc = [conf_creator.use_case_map[conf['use_case']]]
-        plot_agg_results(res, target_cats=categories, xticks=display_uc, vmin=-0.5, vmax=0.5, agg=False)
+        plot_agg_results(res, target_cats=categories, xticks=display_uc, vmin=-0.5, vmax=0.5, agg=False,
+                         plot_type=plot_type, save_path=save_path)
 
     else:
-        plot_results(res, tester, target_cats=categories, plot_params=plot_params)
+        plot_results(res, tester, target_cats=categories, plot_params=plot_params, plot_type=plot_type,
+                     save_path=save_path)
 
 
-def use_case_comparison_analysis(confs: list, plot_params: list, categories: list):
+def use_case_comparison_analysis(confs: list, plot_params: list, categories: list, compared_methods: list,
+                                 agg_fns: list = None, target_agg_result_ids: list = None, only_diff: bool = True):
     assert isinstance(confs, list), "Wrong data type for parameter 'confs'."
     assert len(confs) > 1, "Wrong value for parameter 'confs'."
 
@@ -257,8 +262,16 @@ def use_case_comparison_analysis(confs: list, plot_params: list, categories: lis
 
                 cmp_res = cmp_agg_results(res1, res2, target_cats=categories)
                 display_uc = [conf_creator.use_case_map[conf2['use_case']]]
+
+                if only_diff:
+                    res1 = res2 = res1_name = res2_name = None
+                else:
+                    res1_name = compared_methods[0]
+                    res2_name = compared_methods[1]
+
                 plot_agg_results(cmp_res, target_cats=categories, title_prefix=f'{cmp_vals[0]} vs {cmp_vals[1]}',
-                                 xticks=display_uc, vmin=-0.5, vmax=0.5)
+                                 xticks=display_uc, vmin=-0.5, vmax=0.5, res1=res1, res2=res2, res1_name=res1_name,
+                                 res2_name=res2_name)
 
             else:
                 res1 = list(res1.values())[0]
@@ -294,8 +307,8 @@ def benchmark_analysis(conf: dict, plot_params: list, categories: list, agg_fns:
         plot_benchmark_results(res, tester, use_cases, target_cats=categories, plot_params=plot_params)
 
 
-def benchmark_comparison_analysis(confs: list, plot_params: list, categories: list, agg_fns: list = None,
-                                  target_agg_result_ids: list = None):
+def benchmark_comparison_analysis(confs: list, plot_params: list, categories: list, compared_methods: list,
+                                  agg_fns: list = None,  target_agg_result_ids: list = None, only_diff=True):
     assert isinstance(confs, list), "Wrong data type for parameter 'confs'."
     assert len(confs) > 1, "Wrong value for parameter 'confs'."
 
@@ -305,6 +318,10 @@ def benchmark_comparison_analysis(confs: list, plot_params: list, categories: li
     for idx in range(len(confs) - 1):
         assert confs[idx]['use_case'] == confs[idx + 1]['use_case'], "Use cases not equal."
     use_cases = confs[0]['use_case']
+
+    assert isinstance(compared_methods, list)
+    assert len(compared_methods) == 2
+    assert all([isinstance(p, str) for p in compared_methods])
 
     for conf_idx1 in range(len(confs) - 1):
         conf1 = confs[conf_idx1]
@@ -330,8 +347,16 @@ def benchmark_comparison_analysis(confs: list, plot_params: list, categories: li
 
                 cmp_res = cmp_agg_results(res1, res2, target_cats=categories)
                 display_uc = [conf_creator.use_case_map[uc] for uc in conf_creator.conf_template['use_case']]
+
+                if only_diff:
+                    res1 = res2 = res1_name = res2_name = None
+                else:
+                    res1_name = compared_methods[0]
+                    res2_name = compared_methods[1]
+
                 plot_agg_results(cmp_res, target_cats=categories, title_prefix=f'{cmp_vals[0]} vs {cmp_vals[1]}',
-                                 xticks=display_uc, agg=True, vmin=-0.5, vmax=0.5)
+                                 xticks=display_uc, agg=True, vmin=-0.5, vmax=0.5, res1=res1, res2=res2,
+                                 res1_name=res1_name, res2_name=res2_name)
 
             else:
                 cmp_res = cmp_benchmark_results(res1, res2)
@@ -343,16 +368,16 @@ def benchmark_comparison_analysis(confs: list, plot_params: list, categories: li
 if __name__ == '__main__':
 
     conf = {
-        'use_case': "Structured_Beer",
+        'use_case': "Structured_Beer",  # when analysis_target = 'benchmark' this field will be set with all use cases
         'data_type': 'train',
         'permute': False,
         'model_name': 'bert-base-uncased',
-        'tok': 'sent_pair',
+        'tok': 'attr_pair',
         'size': None,
         'fine_tune_method': 'simple',       # None, 'simple'
         'extractor': {
             'attn_extractor': 'attr_extractor',  # word_extractor
-            'attn_extr_params': {'special_tokens': True, 'agg_metric': 'mean'},
+            'attn_extr_params': {'special_tokens': True, 'agg_metric': 'max'},
         },
         'tester': {
             'tester': 'attr_tester',
@@ -362,15 +387,9 @@ if __name__ == '__main__':
     conf_creator = ConfCreator()
     conf_creator.validate_conf(conf)
 
-    # # for testing one use case at a time
-    # confs = conf_creator.get_confs(conf, ['use_case'])
-    # for conf in confs:
+    analysis_target = 'benchmark'    # 'use_case', 'benchmark'
 
-    analysis_target = 'use_case'
-    # analysis_target = 'benchmark'
-
-    analysis_type = 'simple'
-    # analysis_type = 'comparison'
+    analysis_type = 'comparison'    # 'simple', 'comparison', 'multi'
 
     # plot_params = ['match_attr_attn_loc', 'match_attr_attn_over_mean',
     #                'avg_attr_attn', 'attr_attn_3_last', 'attr_attn_last_1',
@@ -380,7 +399,8 @@ if __name__ == '__main__':
     plot_params = ['attr_attn_3_last', 'match_attr_attn_loc', 'match_attr_attn_over_mean',
                    'avg_attr_attn', 'attr_attn_last_1',
                    'attr_attn_last_2', 'attr_attn_last_3']
-    plot_params = ['match_attr_attn_over_mean']
+    # plot_params = ['match_attr_attn_over_mean']
+    plot_params = ['match_attr_attn_loc']
 
     # aggregation
     agg_fns = None
@@ -390,16 +410,30 @@ if __name__ == '__main__':
 
     categories = ['all']
 
+    extractor_name = conf['extractor']['attn_extractor']
+    tester_name = conf['tester']['tester']
+    template_file_name = '{}_{}_{}_{}_{}_{}_{}_{}_{}'.format(conf['data_type'], extractor_name, tester_name,
+                                                             conf['fine_tune_method'], conf['permute'], conf['tok'],
+                                                             conf['size'], analysis_target, analysis_type)
+
     if analysis_target == 'use_case':
 
         if analysis_type == 'simple':
             use_case_analysis(conf, plot_params, categories, agg_fns, target_agg_result_ids)
 
         elif analysis_type == 'comparison':
-            # comparison_params = ['tok']
-            comparison_params = ['fine_tune_method']
-            confs = conf_creator.get_confs(conf, comparison_params)
-            use_case_comparison_analysis(confs, plot_params, categories)
+            comparison_param = 'fine_tune_method'  # 'tok', 'fine_tune_method'
+
+            if comparison_param == 'fine_tune_method':
+                compared_methods = ['Pre-training', 'Fine-tuning']
+            elif comparison_param == 'tok':
+                compared_methods = ['Attr-pair', 'Sent-pair']
+            else:
+                raise ValueError("Wrong comparison param.")
+
+            confs = conf_creator.get_confs(conf, [comparison_param])
+            use_case_comparison_analysis(confs, plot_params, categories, compared_methods, agg_fns,
+                                         target_agg_result_ids, only_diff=False)
 
         else:
             raise NotImplementedError()
@@ -413,12 +447,40 @@ if __name__ == '__main__':
 
             benchmark_analysis(bench_conf, plot_params, categories, agg_fns, target_agg_result_ids)
 
-        elif analysis_type == 'comparison':
-            # comparison_params = ['tok']
-            comparison_params = ['fine_tune_method']
-            bench_confs = conf_creator.get_confs(bench_conf, comparison_params)
+        elif analysis_type == 'multi':
 
-            benchmark_comparison_analysis(bench_confs, plot_params, categories, agg_fns, target_agg_result_ids)
+            assert agg_fns is None
+            assert target_agg_result_ids is None
+            assert plot_params == ['match_attr_attn_over_mean']
+            assert len(categories) == 1
+
+            confs = conf_creator.get_confs(conf, ['use_case'])
+            imgs = []
+            for conf in confs:
+                uc = conf['use_case']
+                out_file = os.path.join(RESULTS_DIR, uc, f'PLOT_{uc}_{template_file_name}')
+                Path(os.path.join(RESULTS_DIR, uc)).mkdir(parents=True, exist_ok=True)
+                use_case_analysis(conf, plot_params, categories, agg_fns, target_agg_result_ids, plot_type='advanced',
+                                  save_path=out_file)
+                imgs.append(mpimg.imread(f'{out_file}_{plot_params[0]}.png'))
+
+            save_path = os.path.join(RESULTS_DIR, f'GRID_PLOT_{template_file_name}_{plot_params[0]}.pdf')
+            plot_images_grid(imgs, nrows=3, ncols=4, save_path=save_path)
+
+        elif analysis_type == 'comparison':
+            comparison_param = 'tok'   # 'tok', 'fine_tune_method'
+
+            if comparison_param == 'fine_tune_method':
+                compared_methods = ['Pre-training', 'Fine-tuning']
+            elif comparison_param == 'tok':
+                compared_methods = ['Attr-pair', 'Sent-pair']
+            else:
+                raise ValueError("Wrong comparison param.")
+
+            bench_confs = conf_creator.get_confs(bench_conf, [comparison_param])
+
+            benchmark_comparison_analysis(bench_confs, plot_params, categories, compared_methods, agg_fns,
+                                          target_agg_result_ids, only_diff=False)
 
         else:
             raise NotImplementedError()
