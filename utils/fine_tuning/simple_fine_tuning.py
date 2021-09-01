@@ -76,6 +76,8 @@ def train(model_name: str, num_epochs: int, train_dataset: EMDataset, val_datase
     if out_model_path is not None:
         trainer.save_model(out_model_path)
 
+    return trainer
+
 
 def evaluate(model_path: str, eval_dataset: EMDataset):
 
