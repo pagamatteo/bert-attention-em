@@ -308,7 +308,8 @@ def benchmark_analysis(conf: dict, plot_params: list, categories: list, agg_fns:
 
 
 def benchmark_comparison_analysis(confs: list, plot_params: list, categories: list, compared_methods: list,
-                                  agg_fns: list = None,  target_agg_result_ids: list = None, only_diff=True):
+                                  agg_fns: list = None,  target_agg_result_ids: list = None, only_diff: bool = True,
+                                  save_path: str = None):
     assert isinstance(confs, list), "Wrong data type for parameter 'confs'."
     assert len(confs) > 1, "Wrong value for parameter 'confs'."
 
@@ -356,13 +357,13 @@ def benchmark_comparison_analysis(confs: list, plot_params: list, categories: li
 
                 plot_agg_results(cmp_res, target_cats=categories, title_prefix=f'{cmp_vals[0]} vs {cmp_vals[1]}',
                                  xticks=display_uc, agg=True, vmin=-0.5, vmax=0.5, res1=res1, res2=res2,
-                                 res1_name=res1_name, res2_name=res2_name)
+                                 res1_name=res1_name, res2_name=res2_name, save_path=save_path)
 
             else:
                 cmp_res = cmp_benchmark_results(res1, res2)
                 plot_benchmark_results(cmp_res, tester, use_cases, target_cats=categories,
                                        title_prefix=f'{cmp_vals[0]} {cmp_vals[1]}', plot_params=plot_params, vmin=-0.5,
-                                       vmax=0.5)
+                                       vmax=0.5, save_path=save_path)
 
 
 if __name__ == '__main__':
@@ -372,12 +373,12 @@ if __name__ == '__main__':
         'data_type': 'train',
         'permute': False,
         'model_name': 'bert-base-uncased',
-        'tok': 'attr_pair',
+        'tok': 'sent_pair',
         'size': None,
-        'fine_tune_method': 'simple',       # None, 'simple'
+        'fine_tune_method': None,       # None, 'simple'
         'extractor': {
             'attn_extractor': 'attr_extractor',  # word_extractor
-            'attn_extr_params': {'special_tokens': True, 'agg_metric': 'max'},
+            'attn_extr_params': {'special_tokens': True, 'agg_metric': 'mean'},
         },
         'tester': {
             'tester': 'attr_tester',
@@ -399,22 +400,20 @@ if __name__ == '__main__':
     plot_params = ['attr_attn_3_last', 'match_attr_attn_loc', 'match_attr_attn_over_mean',
                    'avg_attr_attn', 'attr_attn_last_1',
                    'attr_attn_last_2', 'attr_attn_last_3']
-    # plot_params = ['match_attr_attn_over_mean']
-    plot_params = ['match_attr_attn_loc']
+    plot_params = ['match_attr_attn_over_mean']
+    # plot_params = ['match_attr_attn_loc']
 
     # aggregation
-    agg_fns = None
-    target_agg_result_ids = None
-    # agg_fns = ['row_mean', 'row_std']
-    # target_agg_result_ids = ['match_attr_attn_loc']
+    # agg_fns = None
+    # target_agg_result_ids = None
+    agg_fns = ['row_mean', 'row_std']
+    target_agg_result_ids = ['match_attr_attn_loc']
 
     categories = ['all']
 
     extractor_name = conf['extractor']['attn_extractor']
     tester_name = conf['tester']['tester']
-    template_file_name = '{}_{}_{}_{}_{}_{}_{}_{}_{}'.format(conf['data_type'], extractor_name, tester_name,
-                                                             conf['fine_tune_method'], conf['permute'], conf['tok'],
-                                                             conf['size'], analysis_target, analysis_type)
+    agg_metric = conf['extractor']['attn_extr_params']['agg_metric']
 
     if analysis_target == 'use_case':
 
@@ -454,6 +453,12 @@ if __name__ == '__main__':
             assert plot_params == ['match_attr_attn_over_mean']
             assert len(categories) == 1
 
+            template_file_name = '{}_{}_{}_{}_{}_{}_{}_{}_{}_{}'.format(conf['data_type'], extractor_name, tester_name,
+                                                                        conf['fine_tune_method'], conf['permute'],
+                                                                        conf['tok'],
+                                                                        conf['size'], analysis_target, analysis_type,
+                                                                        agg_metric)
+
             confs = conf_creator.get_confs(conf, ['use_case'])
             imgs = []
             for conf in confs:
@@ -468,19 +473,27 @@ if __name__ == '__main__':
             plot_images_grid(imgs, nrows=3, ncols=4, save_path=save_path)
 
         elif analysis_type == 'comparison':
+
             comparison_param = 'tok'   # 'tok', 'fine_tune_method'
+
+            template_file_name = '{}_{}_{}_{}_{}_{}_{}_{}_{}'.format(conf['data_type'], extractor_name, tester_name,
+                                                                     conf['permute'],  conf['size'], agg_metric,
+                                                                     analysis_target, analysis_type, comparison_param)
 
             if comparison_param == 'fine_tune_method':
                 compared_methods = ['Pre-training', 'Fine-tuning']
+                template_file_name = f'{template_file_name}_{conf["tok"]}'
             elif comparison_param == 'tok':
                 compared_methods = ['Attr-pair', 'Sent-pair']
+                template_file_name = f'{template_file_name}_{conf["fine_tune_method"]}'
             else:
                 raise ValueError("Wrong comparison param.")
 
             bench_confs = conf_creator.get_confs(bench_conf, [comparison_param])
 
+            save_path = os.path.join(RESULTS_DIR, f'PLOT_LOC_{template_file_name}_{plot_params[0]}.pdf')
             benchmark_comparison_analysis(bench_confs, plot_params, categories, compared_methods, agg_fns,
-                                          target_agg_result_ids, only_diff=False)
+                                          target_agg_result_ids, only_diff=False, save_path=save_path)
 
         else:
             raise NotImplementedError()

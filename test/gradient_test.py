@@ -53,7 +53,8 @@ def run_gradient_test(conf, sampler_conf, fine_tune, grad_params, models_dir, re
         special_tokens=grad_special_tokens,
         show_progress=True
     )
-    out_fname = f"{use_case}_{tok}_{sampler_conf['size']}_{fine_tune}_{grad_text_unit}_{grad_special_tokens}"
+    # out_fname = f"{use_case}_{tok}_{sampler_conf['size']}_{fine_tune}_{grad_text_unit}_{grad_special_tokens}"
+    out_fname = f"{use_case}_{tok}_{sampler_conf['size']}_{fine_tune}_{grad_text_unit}_{grad_special_tokens}_ALL"
     out_dir = os.path.join(res_dir, use_case, out_fname)
     # save grads data
     entity_grad_extr.extract(sample, sample.max_len, out_path=out_dir)
@@ -71,7 +72,8 @@ def load_saved_grads_data(use_case, conf, sampler_conf, fine_tune, grad_conf):
     size = sampler_conf['size']
     text_unit = grad_conf['text_unit']
     special_tokens = grad_conf['special_tokens']
-    out_fname = f"{use_case}_{tok}_{size}_{fine_tune}_{text_unit}_{special_tokens}"
+    # out_fname = f"{use_case}_{tok}_{size}_{fine_tune}_{text_unit}_{special_tokens}"
+    out_fname = f"{use_case}_{tok}_{size}_{fine_tune}_{text_unit}_{special_tokens}_ALL"
     data_path = os.path.join(RESULT_DIR, use_case, out_fname)
     uc_grad = pickle.load(open(f"{data_path}.pkl", "rb"))
     return uc_grad
@@ -85,9 +87,10 @@ if __name__ == '__main__':
                  "Structured_Amazon-Google", "Structured_Walmart-Amazon", "Structured_Beer",
                  "Structured_iTunes-Amazon", "Textual_Abt-Buy", "Dirty_iTunes-Amazon", "Dirty_DBLP-ACM",
                  "Dirty_DBLP-GoogleScholar", "Dirty_Walmart-Amazon"]
-    use_cases = ["Dirty_iTunes-Amazon"]#, "Textual_Abt-Buy"]
+    # use_cases = ["Structured_Amazon-Google", "Structured_Walmart-Amazon", "Textual_Abt-Buy", "Dirty_Walmart-Amazon"]#, "Textual_Abt-Buy"]
     # use_cases = ["Structured_iTunes-Amazon", "Textual_Abt-Buy", "Dirty_iTunes-Amazon", "Dirty_DBLP-ACM",
     #              "Dirty_DBLP-GoogleScholar", "Dirty_Walmart-Amazon"]
+    use_cases = ["Structured_Fodors-Zagats", "Structured_Beer"]
 
     conf = {
         'data_type': 'train',  # 'train', 'test', 'valid'
@@ -102,7 +105,7 @@ if __name__ == '__main__':
     }
 
     sampler_conf = {
-        'size': None,
+        'size': 50,
         'target_class': 'both',  # 'both', 0, 1
         'seeds': [42, 42],  # [42 -> class 0, 42 -> class 1]
     }
@@ -117,7 +120,7 @@ if __name__ == '__main__':
     }
 
     # 'compute_grad', 'plot_grad', 'topk_word_grad', 'topk_word_grad_by_attr', 'topk_word_grad_by_attr_similarity'
-    experiment = 'compute_grad'
+    experiment = 'topk_word_grad_by_attr_similarity'
 
     # [END] PARAMS
 

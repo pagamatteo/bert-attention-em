@@ -179,6 +179,22 @@ def get_most_similar_words_from_sent_pair(sent1: list, sent2: list, topk: int):
         if min_dist < 0.2:
             words_by_sim.append((w1, min_dist_word, min_dist))
 
-    topk_words = sorted(words_by_sim, key=lambda x: x[2])[:topk]
+    topk_words = sorted(words_by_sim, key=lambda x: x[2])
 
-    return topk_words
+    if len(topk_words) == 0:
+        return topk_words
+
+    # if there are more tokens that occupy the top-k positions in equal merit then return even more than tok-k words
+    unique_vals = set([])
+    out_words = []
+    for topk_word in topk_words:
+        unique_vals.add(topk_word[2])
+        out_words.append(topk_word)
+
+        if len(unique_vals) > topk:
+            break
+
+    if len(unique_vals) > topk:
+        out_words = out_words[:-1]
+
+    return out_words

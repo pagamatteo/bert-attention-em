@@ -8,6 +8,11 @@ from core.attention.extractors import AttributeAttentionExtractor, WordAttention
 import numpy as np
 from utils.result_collector import BinaryClassificationResultsAggregator
 from scipy.stats import entropy
+import spacy
+from spacy.tokenizer import Tokenizer
+import re
+import string
+from utils.nlp import get_pos_tag, get_most_similar_words_from_sent_pair
 
 
 class AttentionMapAnalyzer(object):
@@ -125,10 +130,10 @@ class AttentionMapAnalyzer(object):
                 self._save_result(tester_res_history, tester_res, 'true_match')
 
                 if pred is not None:
-                    if pred == 1:   # true positive
+                    if pred == 1:  # true positive
                         self._save_result(tester_res_history, tester_res, 'pred_match')
                         self._save_result(tester_res_history, tester_res, 'tp')
-                    else:           # false negative
+                    else:  # false negative
                         self._save_result(tester_res_history, tester_res, 'pred_non_match')
                         self._save_result(tester_res_history, tester_res, 'fn')
 
@@ -137,10 +142,10 @@ class AttentionMapAnalyzer(object):
                 self._save_result(tester_res_history, tester_res, 'true_non_match')
 
                 if pred is not None:
-                    if pred == 1:   # false positive
+                    if pred == 1:  # false positive
                         self._save_result(tester_res_history, tester_res, 'pred_match')
                         self._save_result(tester_res_history, tester_res, 'fp')
-                    else:           # true negative
+                    else:  # true negative
                         self._save_result(tester_res_history, tester_res, 'pred_non_match')
                         self._save_result(tester_res_history, tester_res, 'tn')
 
@@ -256,9 +261,11 @@ class AttrToClsAttentionAnalyzer(object):
             pred = attn_params['preds'].item() if attn_params['preds'] is not None else None
             assert attn_text_units[0] == '[CLS]' and attn_text_units[-1] == '[SEP]'
             if attrs is None:
-                attrs = [f'{lr}{attr}' for lr in ['l_', 'r_'] for attr in attn_text_units if attr not in ['[CLS]', '[SEP]']]
+                attrs = [f'{lr}{attr}' for lr in ['l_', 'r_'] for attr in attn_text_units if
+                         attr not in ['[CLS]', '[SEP]']]
             else:
-                assert attrs == [f'{lr}{attr}' for lr in ['l_', 'r_'] for attr in attn_text_units if attr not in ['[CLS]', '[SEP]']]
+                assert attrs == [f'{lr}{attr}' for lr in ['l_', 'r_'] for attr in attn_text_units if
+                                 attr not in ['[CLS]', '[SEP]']]
             text_unit_idxs = [i for i, tu in enumerate(attn_text_units) if tu not in ['[CLS]', '[SEP]']]
             text_unit_idxs += [len(attn_text_units) - 1 + i for i in text_unit_idxs]
 
@@ -514,9 +521,9 @@ class EntityToEntityAttentionAnalyzer(object):
             return None
 
         if self.tokenization == 'sent_pair':
-            entity_delimit = attn_row['text_units'].index('[SEP]')     # get first occurrence of the [SEP] token
+            entity_delimit = attn_row['text_units'].index('[SEP]')  # get first occurrence of the [SEP] token
 
-        else:       # attr-pair
+        else:  # attr-pair
             # in the attr-pair tokenization the [SEP] token is also used to delimit the attributes
             entity_delimit = sep_idxs[(len(sep_idxs) // 2) - 1]
 
@@ -534,8 +541,8 @@ class EntityToEntityAttentionAnalyzer(object):
         left_target_idxs = list(range(entity_delimit + 1))
         right_target_idxs = list(range(entity_delimit, top_attns.shape[1]))
         if self.ignore_special:
-            left_target_idxs = left_target_idxs[1:]     # remove [CLS]
-            left_target_idxs = sorted(list(set(left_target_idxs).difference(set(sep_idxs))))    # remove [SEP]s
+            left_target_idxs = left_target_idxs[1:]  # remove [CLS]
+            left_target_idxs = sorted(list(set(left_target_idxs).difference(set(sep_idxs))))  # remove [SEP]s
             right_target_idxs = sorted(list(set(right_target_idxs).difference(set(sep_idxs))))  # remove [SEP]s
 
         e2e_attn = np.zeros(top_attns.shape[0])
@@ -545,7 +552,7 @@ class EntityToEntityAttentionAnalyzer(object):
                 left_hits = top_attns[layer, left_target_idxs, :][:, left_target_idxs].sum()
                 right_hits = top_attns[layer, right_target_idxs, :][:, right_target_idxs].sum()
 
-            else:   # cross_entity
+            else:  # cross_entity
                 left_hits = top_attns[layer, left_target_idxs, :][:, right_target_idxs].sum()
                 right_hits = top_attns[layer, right_target_idxs, :][:, left_target_idxs].sum()
 
@@ -638,3 +645,455 @@ class EntityToEntityAttentionAnalyzer(object):
             plt.savefig(save_path, bbox_inches='tight')
 
         plt.show()
+
+
+class TopKAttentionAnalyzer(object):
+    def __init__(self, attns: list, topk: int, tokenization: str):
+        WordAttentionExtractor.check_batch_attn_features(attns)
+        assert isinstance(topk, int), "Wrong data type for parameter 'topk'."
+        assert isinstance(tokenization, str)
+        assert tokenization in ['sent_pair', 'attr_pair']
+
+        attn_data = {}
+        for attn in attns:
+            attn_features = attn[2]
+            attn_values = attn_features['attns']
+            attn_text_units = attn_features['text_units']
+            label = int(attn_features['labels'].item())
+            pred = int(attn_features['preds'].item()) if attn_features['preds'] is not None else None
+
+            # find the [SEP] token used to delimit the two entities
+            sep_idxs = np.where(np.array(attn_text_units) == '[SEP]')[0]
+
+            # filter out truncated rows
+            if len(sep_idxs) % 2 != 0 or attn_values is None:
+                print("Skip truncated row.")
+                continue
+
+            if tokenization == 'sent_pair':
+                entity_delimit = attn_text_units.index('[SEP]')  # get first occurrence of the [SEP] token
+
+            else:  # attr-pair
+                # in the attr-pair tokenization the [SEP] token is also used to delimit the attributes
+                entity_delimit = sep_idxs[(len(sep_idxs) // 2) - 1]
+
+            # get an average attention map for each layer by averaging all the heads referring to the same layer
+            attn_values = attn_values.mean(axis=1)
+
+            # ignore (or not) the special tokens and related attention weights
+            left_idxs = list(range(entity_delimit + 1))
+            right_idxs = list(range(entity_delimit, attn_values.shape[1]))
+            left_idxs = left_idxs[1:]  # remove [CLS]
+            left_idxs = sorted(list(set(left_idxs).difference(set(sep_idxs))))  # remove [SEP]s
+            right_idxs = sorted(list(set(right_idxs).difference(set(sep_idxs))))  # remove [SEP]s
+            valid_idxs = np.array(left_idxs + right_idxs)
+            attn_values = attn_values[:, valid_idxs, :][:, :, valid_idxs]
+            attn_text_units = list(np.array(attn_text_units)[valid_idxs])
+
+            assert attn_values.shape[1] == len(attn_text_units)
+
+            for layer in range(attn_values.shape[0]):
+                layer_attn_values = attn_values[layer]
+
+                # aggregate the attention values in order to obtain a single attention score for each word
+                # for each word calculate the average attention per row and per column and obtain the maximum value
+                agg_layer_attns = np.maximum(layer_attn_values.mean(axis=0), layer_attn_values.mean(axis=1))
+
+                item = {
+                    'label': label,
+                    'pred': pred,
+                    'attns': {'text_units': attn_text_units, 'values': agg_layer_attns, 'left': attn[0],
+                              'right': attn[1], 'sep_idx': len(left_idxs)},
+                }
+
+                if layer not in attn_data:
+                    attn_data[layer] = [item]
+                else:
+                    attn_data[layer].append(item)
+
+        self.attn_data = attn_data
+        self.topk = topk
+        self.tokenization = tokenization
+        self.analysis_types = ['pos', 'str_type', 'sim']
+        self.pos_model = spacy.load('en_core_web_sm')
+        self.pos_model.tokenizer = Tokenizer(self.pos_model.vocab, token_match=re.compile(r'\S+').match)
+
+    @staticmethod
+    def get_topk_text_units(attn_record: dict, topk: int):
+        assert isinstance(attn_record, dict), "Wrong data type for parameter 'attn_record'."
+        assert all([p in attn_record for p in ['text_units', 'values']])
+        assert isinstance(topk, int), "Wrong data type for parameter 'topk'."
+
+        text_units = attn_record['text_units']
+        attns = attn_record['values']
+        assert len(text_units) == len(attns)
+        top_words = list(sorted(zip(attns, text_units), key=lambda x: x[0], reverse=True))[:topk]
+        topk_words_idx = np.array(attns).argsort()[-topk:][::-1]
+        return {'sent': {'text_units': [t[1] for t in top_words], 'values': [t[0] for t in top_words],
+                         'idxs': topk_words_idx, 'original_text': text_units}}
+
+    @staticmethod
+    def get_topk_text_units_in_entity_pair_by_attr(attn_record, tok: str, topk, pair_mode=False):
+        assert isinstance(attn_record, dict), "Wrong data type for parameter 'attn_record'."
+        assert all([p in attn_record for p in ['text_units', 'values', 'sep_idx']])
+        assert isinstance(tok, str)
+        assert isinstance(topk, int), "Wrong data type for parameter 'topk'."
+
+        def get_topk_text_units_in_entity_by_attr(attn, tokens, entity, topk, offset=0):
+            # check that the input record matches with the grad data
+            first_attr = str(entity.iloc[0]).split()
+            attn_first_attr = tokens[:len(first_attr)]
+            if len(attn_first_attr) < len(first_attr):
+                first_attr = first_attr[:len(attn_first_attr)]
+            assert attn_first_attr == first_attr
+
+            topk_text_units_by_attr = {}
+            cum_idx = 0
+            for attr, val in entity.iteritems():
+                val = str(val).split()
+                attn_attr = attn[cum_idx:cum_idx + len(val)]
+                attn_attr_tokens = tokens[cum_idx:cum_idx + len(val)]
+
+                if len(val) == len(attn_attr_tokens):
+                    assert val == attn_attr_tokens
+
+                topk_words = list(sorted(zip(attn_attr, attn_attr_tokens), key=lambda x: x[0], reverse=True))[:topk]
+                topk_words_idx = np.array(attn_attr).argsort()[-topk:][::-1]
+                topk_words_idx += (cum_idx + offset)
+                cum_idx += len(val)
+                topk_text_units_by_attr[attr] = {'text_units': [w[1] for w in topk_words],
+                                                 'values': [w[0] for w in topk_words],
+                                                 'idxs': topk_words_idx, 'original_text': val}
+                if len(val) > len(attn_attr):
+                    break
+
+            return topk_text_units_by_attr
+
+        sep_idx = attn_record['sep_idx']
+        left_entity = attn_record['left']
+        left_tokens = list(np.array(attn_record['text_units'])[:sep_idx])
+        left_attns = np.array(attn_record['values'])[:sep_idx]
+        left_topk = get_topk_text_units_in_entity_by_attr(left_attns, left_tokens, left_entity, topk, offset=0)
+
+        right_entity = attn_record['right']
+        right_tokens = list(np.array(attn_record['text_units'])[sep_idx:])
+        right_attns = np.array(attn_record['values'])[sep_idx:]
+        right_topk = get_topk_text_units_in_entity_by_attr(right_attns, right_tokens, right_entity, topk,
+                                                           offset=sep_idx)
+
+        all_topk = {}
+        if pair_mode:
+            for attr in left_topk:
+                if attr in right_topk:
+                    all_topk[attr] = (left_topk[attr], right_topk[attr])
+        else:
+            all_topk.update({f'l_{attr}': left_topk[attr] for attr in left_topk})
+            all_topk.update({f'r_{attr}': right_topk[attr] for attr in right_topk})
+
+        return all_topk
+
+    @staticmethod
+    def get_topk(data: list, target_key: str, topk: int, tok: str, by_attr: bool, target_categories: list = None,
+                 pair_mode: bool = False):
+
+        aggregator = BinaryClassificationResultsAggregator(target_key, target_categories=target_categories)
+        agg_attn_data, _, _, _ = aggregator.add_batch_data(data)
+
+        top_word_by_cat = {}
+        for cat in agg_attn_data:
+            cat_attn_data = agg_attn_data[cat]
+            assert isinstance(agg_attn_data[cat], list)
+            assert len(agg_attn_data[cat]) > 0
+
+            if cat_attn_data is None:
+                continue
+
+            for attn_idx, attn_data in enumerate(cat_attn_data):
+
+                if by_attr:
+                    top_words = TopKAttentionAnalyzer.get_topk_text_units_in_entity_pair_by_attr(attn_data, tok=tok,
+                                                                                                 topk=topk,
+                                                                                                 pair_mode=pair_mode)
+                else:
+                    top_words = TopKAttentionAnalyzer.get_topk_text_units(attn_data, topk=topk)
+
+                if cat not in top_word_by_cat:
+                    top_word_by_cat[cat] = [top_words]
+                else:
+                    top_word_by_cat[cat].append(top_words)
+
+        return top_word_by_cat
+
+    def analyze(self, analysis_type: str, by_attr: bool, target_layer: int = None, target_categories: list = None):
+        assert isinstance(analysis_type, str), "Wrong data type for parameter 'analysis_type'."
+        assert analysis_type in self.analysis_types, f"Wrong type: {analysis_type} not in {self.analysis_types}."
+        assert isinstance(by_attr, bool), "Wrong data type for parameter 'by_attr'."
+        if target_layer is not None:
+            assert isinstance(target_layer, int)
+            assert target_layer in self.attn_data
+
+        # get top-k words at attribute or sentence level
+        pair_mode = False
+        if analysis_type == 'sim':
+            pair_mode = True
+
+        out_data = {}
+        for layer in self.attn_data:
+            print(f"Layer#{layer}")
+            layer_attn_data = self.attn_data[layer]
+
+            if target_layer is not None:
+                if layer != target_layer:
+                    continue
+
+            top_words_by_cat = TopKAttentionAnalyzer.get_topk(layer_attn_data, 'attns', self.topk, self.tokenization,
+                                                              by_attr, target_categories, pair_mode=pair_mode)
+
+            top_results = {}
+            # loop over the data categories (e.g., match, non-match, fp, etc.)
+            for cat in top_words_by_cat:
+                print(f"\tCategory: {cat}")
+                top_words_in_cat = top_words_by_cat[cat]
+
+                top_stats = {}
+                # loop over the topk words extracted from each record
+                for top_words in tqdm(top_words_in_cat):
+
+                    # loop over the topk words related to a specific attribute or the whole sentence
+                    for key in top_words:
+
+                        top_words_by_key = top_words[key]
+
+                        if analysis_type == 'str_type':
+                            stats_cat = ['alpha', 'punct', 'num', 'no-alpha']
+                            for tu in top_words_by_key['text_units']:
+                                if tu in string.punctuation:
+                                    text_cat = 'punct'
+                                elif any(c.isdigit() for c in tu):
+                                    text_cat = 'num'
+                                elif not tu.isalpha():
+                                    text_cat = 'no-alpha'
+                                elif tu.isalpha():
+                                    text_cat = 'alpha'
+                                else:
+                                    text_cat = 'other'
+                                # print(tu, text_cat)
+                                if key not in top_stats:
+                                    top_stats[key] = {text_cat: 1}
+                                else:
+                                    if text_cat not in top_stats[key]:
+                                        top_stats[key][text_cat] = 1
+                                    else:
+                                        top_stats[key][text_cat] += 1
+
+                        elif analysis_type == 'pos':
+                            stats_cat = ['TEXT', 'PUNCT', 'NUM&SYM', 'CONN']
+                            sent = ' '.join(top_words_by_key['original_text'])
+                            sent = self.pos_model(sent)
+                            for word_idx, word in enumerate(sent):
+                                if word_idx in top_words_by_key['idxs']:
+                                    pos_tag = get_pos_tag(word)
+                                    # print(word, pos_tag)
+                                    if key not in top_stats:
+                                        top_stats[key] = {pos_tag: 1}
+                                    else:
+                                        if pos_tag not in top_stats[key]:
+                                            top_stats[key][pos_tag] = 1
+                                        else:
+                                            top_stats[key][pos_tag] += 1
+
+                        elif analysis_type == 'sim':
+                            left_top_attn = top_words_by_key[0]
+                            right_top_attn = top_words_by_key[1]
+                            left_words = left_top_attn['original_text']
+                            right_words = right_top_attn['original_text']
+                            left_words_attn = left_top_attn['text_units']
+                            right_words_attn = right_top_attn['text_units']
+                            top_sim_words = get_most_similar_words_from_sent_pair(left_words, right_words, self.topk)
+                            left_top_sim_words = [t[0] for t in top_sim_words]
+                            right_top_sim_words = [t[1] for t in top_sim_words]
+
+                            if len(top_sim_words) == 0 or len(left_words_attn) < self.topk or len(right_words_attn) < self.topk:
+                                continue
+
+                            acc = 0
+                            for j in range(len(left_words_attn)):
+                                if left_words_attn[j] in left_top_sim_words and right_words_attn[j] in right_top_sim_words:
+                                    acc += 1
+                            acc /= self.topk
+
+                            if key not in top_stats:
+                                top_stats[key] = [acc]
+                            else:
+                                top_stats[key].append(acc)
+
+                        else:
+                            raise NotImplementedError()
+
+                top_norm_stats = {}
+                if analysis_type != 'sim':
+                    for key in top_stats:
+                        top_stats_key = top_stats[key]
+                        key = '{}{}'.format(key[:2], key[2:].replace("_", "\n"))
+                        tot_count = np.sum(list(top_stats_key.values()))
+                        top_norm_stats[key] = {k: int(round((v / tot_count) * 100)) for k, v in top_stats_key.items()}
+                        for c in stats_cat:
+                            if c not in top_norm_stats[key]:
+                                top_norm_stats[key][c] = 0
+                else:
+                    for key in top_stats:
+                        if len(top_stats[key]) >= len(top_words_in_cat) - int(0.10 * len(top_words_in_cat)):
+                            print(cat, key, len(top_stats[key]), len(top_words_in_cat) - int(0.10 * len(top_words_in_cat)))
+                            top_norm_stats[key] = np.sum(top_stats[key]) / len(top_stats[key])
+                        else:
+                            print("REMOVED ", cat, key, len(top_stats[key]))
+
+                        # let's exit from the loop in order to consider only the first attribute
+                        # note that from Python 3.7 the dict structure has to preserve the key insertion order
+                        break
+
+                top_results[cat] = top_norm_stats
+
+            # change the format of the stats
+            out_stats = {}
+            if analysis_type != 'sim':
+                keys = list(list(top_results.values())[0].keys())
+                if len(keys) == 1:
+                    for key in keys:
+                        key_stats = {cat: top_results[cat][key] for cat in top_results}
+                        stats = pd.DataFrame(key_stats)
+                        stats = stats.rename(columns={'all_pos': 'match', 'all_neg': 'non_match'})
+                        stats = stats.T
+                        stats = stats[stats_cat].fillna(0)
+                        out_stats[key] = stats
+                else:
+                    for cat in top_results:
+                        stats = pd.DataFrame(top_results[cat])
+                        stats = stats.T
+                        stats = stats[stats_cat]
+                        stats = stats.fillna(0)
+                        out_stats[cat] = stats
+            else:
+                stats = pd.DataFrame([top_results[cat] for cat in top_results], index=list(top_results.keys()))
+                stats = stats.rename(index={'all_pos': 'match', 'all_neg': 'non_match'})
+                out_stats = {self.topk: stats}
+
+            out_data[layer] = out_stats
+
+        return out_data
+
+    @staticmethod
+    def plot_top_attn_stats(plot_data: dict, plot_params: dict, ylabel: str, out_plot_name: str = None,
+                            legend: bool = True, y_lim: tuple = None, legend_position=None):
+        assert isinstance(plot_data, dict)
+        assert isinstance(plot_params, dict)
+        assert isinstance(ylabel, str)
+        if out_plot_name is not None:
+            assert isinstance(out_plot_name, str)
+
+        ncols = 4
+        nrows = 3
+        if len(plot_data) == 1:
+            ncols = 1
+            nrows = 1
+        fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(20, 10), sharey=True)
+        if len(plot_data) > 1:
+            axes = axes.flat
+        for idx, use_case in enumerate(plot_data):
+
+            if len(plot_data) > 1:
+                ax = axes[idx]
+            else:
+                ax = axes
+
+            use_case_stats = plot_data[use_case]
+            if len(plot_data) > 1:
+                use_case_stats.plot(**plot_params, ax=ax, legend=False, rot=0)
+            else:
+                use_case_stats.plot(**plot_params, ax=ax, legend=legend, rot=0)
+
+            ax.set_title(use_case, fontsize=18)
+            if idx % ncols == 0:
+                if ylabel is not None:
+                    ax.set_ylabel(ylabel, fontsize=20)
+            ax.set_xlabel("layers", fontsize=20)
+            ax.xaxis.set_tick_params(labelsize=18)
+            ax.yaxis.set_tick_params(labelsize=20)
+            if len(use_case_stats) > 1:
+                ax.set_xticks(list(use_case_stats.index)[::2])
+            if y_lim is not None:
+                assert len(y_lim) == 2
+                ax.set_ylim(y_lim[0], y_lim[1])
+
+        if len(plot_data) > 1:
+            if legend:
+                handles, labels = ax.get_legend_handles_labels()
+                if legend_position is None:
+                    legend_position = (0.73, 0.15)
+                fig.legend(handles, labels, bbox_to_anchor=legend_position, ncol=4, fontsize=20)
+        plt.subplots_adjust(wspace=0.1, hspace=0.6)
+        if out_plot_name:
+            plt.savefig(out_plot_name, bbox_inches='tight')
+        #plt.tight_layout()
+        plt.show()
+
+    @staticmethod
+    def plot_agg_top_attn_stats(plot_data: dict, agg_dim: str, ylabel: str = None, out_plot_name: str = None):
+
+        assert isinstance(plot_data, dict)
+        assert isinstance(agg_dim, str)
+        assert agg_dim in ['layer', 'use_case']
+        if ylabel is not None:
+            assert isinstance(ylabel, str)
+        if out_plot_name is not None:
+            assert isinstance(out_plot_name, str)
+
+        if agg_dim == 'layer':           # average the score across the layers
+            first_item = list(plot_data.values())[0]
+            columns = first_item.columns
+            avg_plot_data = np.zeros((len(plot_data), len(columns)))
+            std_plot_data = np.zeros((len(plot_data), len(columns)))
+            for idx, uc in enumerate(plot_data):
+                avg_plot_data[idx, :] = plot_data[uc].values.mean(axis=0)
+                std_plot_data[idx, :] = plot_data[uc].values.std(axis=0)
+            avg_plot_data_table = pd.DataFrame(avg_plot_data, index=plot_data.keys(), columns=columns)
+            std_plot_data_table = pd.DataFrame(std_plot_data, index=plot_data.keys(), columns=columns)
+            avg_plot_data_table.plot(kind='bar', figsize=(12, 3), yerr=std_plot_data_table)
+            ax = plt.gca()
+            ax.set_ylim(0, 1)
+            plt.xticks(rotation=0)
+            plt.legend(ncol=4, loc='upper center')
+            if ylabel is not None:
+                plt.ylabel(ylabel)
+            plt.tight_layout()
+            plt.show()
+
+        else:                   # average the scores across the use cases
+            assert len(plot_data) > 1
+
+            first_item = list(plot_data.values())[0]
+            columns = first_item.columns
+            tab_index = first_item.index
+            avg_plot_data = np.zeros((len(tab_index), len(columns)))
+            std_plot_data = np.zeros((len(tab_index), len(columns)))
+            std_layers_plot_data = [np.zeros((len(plot_data), len(columns))) for _ in range(len(tab_index))]
+            for idx, uc in enumerate(plot_data):
+                uc_plot_data = plot_data[uc]
+                avg_plot_data += uc_plot_data.values
+                for l in range(len(uc_plot_data)):
+                    std_layers_plot_data[l][idx, :] = uc_plot_data.values[l, :]
+            avg_plot_data /= len(plot_data)
+            for l in range(len(std_layers_plot_data)):
+                std_plot_data[l, :] = std_layers_plot_data[l].std(axis=0)
+            avg_plot_data_table = pd.DataFrame(avg_plot_data, index=tab_index, columns=columns)
+            std_plot_data_table = pd.DataFrame(std_plot_data, index=tab_index, columns=columns)
+            avg_plot_data_table.plot(kind='bar', figsize=(12, 3), yerr=std_plot_data_table)
+            ax = plt.gca()
+            ax.set_ylim(0, 1)
+            plt.xticks(rotation=0)
+            plt.legend(ncol=4, loc='upper center')
+            if ylabel is not None:
+                plt.ylabel(ylabel)
+            plt.tight_layout()
+            plt.show()
+

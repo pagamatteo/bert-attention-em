@@ -127,7 +127,7 @@ def plot_comparison(res1, res2, cmp_res, tester, cmp_vals, target_cats=None, plo
 
 
 def plot_benchmark_results(results, tester, use_cases, target_cats=None, plot_params=None, title_prefix=None, vmin=0,
-                           vmax=1):
+                           vmax=1, save_path: str = None):
     assert isinstance(results, dict)
     assert isinstance(use_cases, list)
     assert len(use_cases) > 0
@@ -235,6 +235,8 @@ def plot_agg_results(results, target_cats=None, title_prefix=None, xlabel=None, 
         assert res1 is not None
         assert res2_name is not None
 
+    out_path = save_path.replace('.pdf', '')
+
     for cat in results:
 
         if target_cats is not None:
@@ -272,7 +274,8 @@ def plot_agg_results(results, target_cats=None, title_prefix=None, xlabel=None, 
                     res1_cat = res1[cat][metric][res_id]
                     res2_cat = res2[cat][metric][res_id]
                     diff_res = cat_res[metric][res_id]
-                    plot_compared_results(res1_cat, res2_cat, diff_res, res1_name, res2_name, out_file_name=save_path)
+                    plot_compared_results(res1_cat, res2_cat, diff_res, res1_name, res2_name,
+                                          out_file_name=f'{out_path}_{metric.split("_")[-1]}.pdf')
 
             if agg:
                 if res1 is None:
@@ -287,7 +290,7 @@ def plot_agg_results(results, target_cats=None, title_prefix=None, xlabel=None, 
                     res2_cat_agg = res2[cat][metric][res_id].mean(1).reshape((-1, 1))
                     diff_res_agg = cat_res[metric][res_id].mean(1).reshape((-1, 1))
                     plot_compared_results(res1_cat_agg, res2_cat_agg, diff_res_agg, res1_name, res2_name,
-                                          out_file_name=save_path)
+                                          out_file_name=f'{out_path}_{metric.split("_")[-1]}.pdf')
 
 
 def plot_left_to_right_heatmap(data: np.ndarray, vmin: (int, float), vmax: (int, float), title: str = None,

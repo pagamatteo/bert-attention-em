@@ -4,8 +4,10 @@ from pathlib import Path
 from multiprocessing import Process
 import pickle
 from core.attention.extractors import AttributeAttentionExtractor, WordAttentionExtractor, AttentionExtractor
-from core.attention.analyzers import AttrToClsAttentionAnalyzer, EntityToEntityAttentionAnalyzer
+from core.attention.analyzers import AttrToClsAttentionAnalyzer, EntityToEntityAttentionAnalyzer, TopKAttentionAnalyzer
 from utils.test_utils import ConfCreator
+import pandas as pd
+import itertools
 
 
 PROJECT_DIR = Path(__file__).parent.parent.parent
@@ -14,7 +16,6 @@ RESULTS_DIR = os.path.join(PROJECT_DIR, 'results', 'attention')
 
 
 def get_attn_extractor(conf: dict, sampler_conf: dict, fine_tune: str, attn_params: dict, models_dir: str):
-
     assert isinstance(attn_params, dict)
     assert 'attn_extractor' in attn_params
     assert 'attn_extr_params' in attn_params
@@ -50,7 +51,6 @@ def get_attn_extractor(conf: dict, sampler_conf: dict, fine_tune: str, attn_para
 
 def run_attn_extractor(conf: dict, sampler_conf: dict, fine_tune: str, attn_params: dict, models_dir: str,
                        res_dir: str):
-
     use_case = conf['use_case']
     tok = conf['tok']
     extractor_name = attn_params['attn_extractor']
@@ -162,25 +162,77 @@ def compute_attn_to_cls(use_cases, conf, sampler_conf, fine_tune, attn_params, r
     return uc_grouped_attn
 
 
+def execute_experiment_topk_attn_words(use_cases, conf, sampler_conf, fine_tune, attn_params, res_dir, experiment,
+                                       target_layer, save_path=None):
+
+    topk_map = {
+        "Structured_Fodors-Zagats": 1, "Structured_DBLP-GoogleScholar": 3, "Structured_DBLP-ACM": 3,
+        "Structured_Amazon-Google": 3, "Structured_Walmart-Amazon": 3, "Structured_Beer": 1,
+        "Structured_iTunes-Amazon": 1, "Textual_Abt-Buy": 3, "Dirty_iTunes-Amazon": 3, "Dirty_DBLP-ACM": 5,
+        "Dirty_DBLP-GoogleScholar": 5, "Dirty_Walmart-Amazon": 5,
+    }
+
+    stats_data = {}
+    for use_case in use_cases:
+        print(use_case)
+        uc_attn = load_saved_attn_data(use_case, conf, sampler_conf, fine_tune, attn_params, res_dir)
+
+        if experiment == 'topk_attn_word':
+
+            target_categories = ['all']
+            assert len(target_categories) == 1
+
+            analyzer = TopKAttentionAnalyzer(uc_attn, topk=5, tokenization=conf['tok'])
+            analyzed_data = analyzer.analyze('pos', by_attr=False, target_categories=target_categories,
+                                             target_layer=target_layer)
+
+            for layer in analyzed_data:
+                l_analyzed_data = analyzed_data[layer]
+                assert isinstance(l_analyzed_data, dict)
+                assert len(l_analyzed_data) == 1
+                analyzed_data[layer] = list(l_analyzed_data.values())[0]
+
+        else:  # experiment 'topk_word_attn_by_attr_similarity'
+            # topk_range = [1, 3, 5, 10]
+            topk = topk_map[use_case]
+            target_categories = ['all_pos']
+            assert len(target_categories) == 1
+
+            analyzer = TopKAttentionAnalyzer(uc_attn, topk=topk, tokenization=conf['tok'])
+            analyzed_data = analyzer.analyze('sim', by_attr=True, target_categories=target_categories,
+                                             target_layer=target_layer)
+            for layer in analyzed_data:
+                l_analyzed_data = analyzed_data[layer]
+                assert isinstance(l_analyzed_data, dict)
+                assert len(l_analyzed_data) == 1
+                df_layer = list(l_analyzed_data.values())[0]
+                assert not df_layer.empty
+                df_layer = df_layer.T
+                df_layer.columns = [topk]
+                analyzed_data[layer] = df_layer
+
+        layer_stats = [analyzed_data[layer] for layer in analyzed_data]
+        if target_layer is not None:
+            layer_stats_tab = layer_stats[0]
+            layer_stats_tab.index = [target_layer]
+        else:
+            layer_stats_tab = pd.concat(layer_stats)
+            layer_stats_tab.index = range(1, 13)
+        stats_data[use_case] = layer_stats_tab
+
+    # save the results
+    if save_path is not None:
+        with open(save_path, 'wb') as f:
+            pickle.dump(stats_data, f)
+
+    return stats_data
+
+
 if __name__ == '__main__':
     use_cases = ["Structured_Fodors-Zagats", "Structured_DBLP-GoogleScholar", "Structured_DBLP-ACM",
                  "Structured_Amazon-Google", "Structured_Walmart-Amazon", "Structured_Beer",
                  "Structured_iTunes-Amazon", "Textual_Abt-Buy", "Dirty_iTunes-Amazon", "Dirty_DBLP-ACM",
                  "Dirty_DBLP-GoogleScholar", "Dirty_Walmart-Amazon"]
-    use_cases = ["Structured_Fodors-Zagats", "Structured_DBLP-ACM",
-                 "Structured_Amazon-Google", "Structured_Walmart-Amazon",
-                 "Structured_Beer",
-                 "Structured_iTunes-Amazon", "Textual_Abt-Buy",
-                 "Dirty_iTunes-Amazon", "Dirty_DBLP-ACM",
-                 "Dirty_Walmart-Amazon"]
-    # use_cases = ["Structured_DBLP-GoogleScholar",
-    #              #"Structured_DBLP-ACM",
-    #              "Dirty_DBLP-GoogleScholar",]
-    #              #"Dirty_DBLP-ACM"]
-    # use_cases = ["Structured_DBLP-ACM", "Structured_Amazon-Google",
-    #             "Dirty_DBLP-ACM"]
-    # use_cases = ["Structured_Amazon-Google"]
-    # use_cases = ["Structured_Amazon-Google", "Structured_Beer", "Textual_Abt-Buy", "Dirty_Walmart-Amazon"]
 
     # [BEGIN] INPUT PARAMS ---------------------------------------------------------------------------------------------
     conf = {
@@ -201,19 +253,20 @@ if __name__ == '__main__':
         'seeds': [42, 42],  # [42 -> class 0, 42 -> class 1]
     }
 
-    fine_tune = 'simple'  # None, 'simple', 'advanced'
+    fine_tune = None  # None, 'simple', 'advanced'
 
     attn_params = {
-        'attn_extractor': 'word_extractor',     # 'attr_extractor', 'word_extractor', 'token_extractor'
+        'attn_extractor': 'word_extractor',  # 'attr_extractor', 'word_extractor', 'token_extractor'
         'attn_extr_params': {'special_tokens': True, 'agg_metric': 'mean'},
     }
 
-    # if attn_params['attn_extractor'] == 'word_extractor' and conf['tok'] == 'attr_pair':
-    #     raise NotImplementedError()
+    # AVAILABLE EXPERIMENTS
+    # 'compute_attn', 'attr_to_cls', 'attr_to_cls_entropy', 'word_to_cls', 'entity_to_entity', 'topk_attn_word',
+    # 'topk_word_attn_by_attr_similarity'
 
-    # experiment = 'compute_attn', 'attr_to_cls', 'attr_to_cls_entropy', 'word_to_cls', 'entity_to_entity'
-    experiment = 'compute_attn'
-    sub_experiment = 'comparison'   # 'simple', 'comparison'
+    experiment = 'topk_word_attn_by_attr_similarity'
+    sub_experiment = 'comparison'  # 'simple', 'comparison'
+
     # [END] INPUT PARAMS -----------------------------------------------------------------------------------------------
 
     if experiment == 'compute_attn':
@@ -262,24 +315,28 @@ if __name__ == '__main__':
         elif sub_experiment == 'comparison':
             print("Target categories set to 'all'")
             target_categories = ['all']
-            comparison = 'tok'  # 'tune', 'tok'
+            comparison = 'tune'  # 'tune', 'tok', 'tune_tok'
 
             if comparison == 'tune':
                 new_fine_tune = None
                 print("Load pre-trained data")
                 pretrain_att2cls_res = compute_attn_to_cls(use_cases, conf, sampler_conf, new_fine_tune, attn_params,
-                                                           RESULTS_DIR, experiment, target_categories)
+                                                           RESULTS_DIR, experiment, ['all', 'all_pos', 'all_neg'])
 
                 new_fine_tune = 'simple'
                 print("Load fine-tuned data")
                 finetune_att2cls_res = compute_attn_to_cls(use_cases, conf, sampler_conf, new_fine_tune, attn_params,
-                                                           RESULTS_DIR, experiment, target_categories)
+                                                           RESULTS_DIR, experiment, ['all', 'all_pos', 'all_neg'])
 
                 attn2cls_res = {}
                 for k in pretrain_att2cls_res:
-                    attn2cls_res[k] = {'pre_train': pretrain_att2cls_res[k]['all']}
+                    attn2cls_res[k] = {'pretrain': pretrain_att2cls_res[k]['all']}
+                    # attn2cls_res[k] = {'pretrain_match': pretrain_att2cls_res[k]['all_pos']}
+                    # attn2cls_res[k]['pretrain_nonmatch'] = pretrain_att2cls_res[k]['all_neg']
                 for k in finetune_att2cls_res:
-                    attn2cls_res[k]['fine_tune'] = finetune_att2cls_res[k]['all']
+                    attn2cls_res[k]['finetune'] = finetune_att2cls_res[k]['all']
+                    # attn2cls_res[k]['finetune_match'] = finetune_att2cls_res[k]['all_pos']
+                    # attn2cls_res[k]['finetune_nonmatch'] = finetune_att2cls_res[k]['all_neg']
 
                 out_fname = f"PLOT_ATT2CLS{is_entropy}CMP_{comparison}_{conf['tok']}_{sampler_conf['size']}_{extractor_name}_{extr_params}.pdf"
 
@@ -301,6 +358,42 @@ if __name__ == '__main__':
                 for k in attrpair_att2cls_res:
                     attn2cls_res[k]['attr_pair'] = attrpair_att2cls_res[k]['all']
                 out_fname = f"PLOT_ATT2CLS{is_entropy}CMP_{comparison}_{sampler_conf['size']}_{fine_tune}_{extractor_name}_{extr_params}.pdf"
+
+            elif comparison == 'tune_tok':
+                new_conf = conf.copy()
+                new_conf['tok'] = 'sent_pair'
+                new_fine_tune = None
+                print("Load pretrain sent_pair data")
+                pretrain_sent_att2cls_res = compute_attn_to_cls(use_cases, new_conf, sampler_conf, new_fine_tune,
+                                                                attn_params, RESULTS_DIR, experiment, ['all'])
+
+                new_conf = conf.copy()
+                new_conf['tok'] = 'attr_pair'
+                print("Load pretrain attr_pair data")
+                pretrain_attr_att2cls_res = compute_attn_to_cls(use_cases, new_conf, sampler_conf, new_fine_tune,
+                                                                attn_params, RESULTS_DIR, experiment, ['all'])
+
+                new_fine_tune = 'simple'
+                new_conf['tok'] = 'sent_pair'
+                print("Load finetuned sent_pair data")
+                finetuned_sent_att2cls_res = compute_attn_to_cls(use_cases, new_conf, sampler_conf, new_fine_tune,
+                                                                 attn_params, RESULTS_DIR, experiment, ['all'])
+
+                new_conf['tok'] = 'attr_pair'
+                print("Load finetuned attr_pair data")
+                finetuned_attr_att2cls_res = compute_attn_to_cls(use_cases, new_conf, sampler_conf, new_fine_tune,
+                                                                 attn_params, RESULTS_DIR, experiment, ['all'])
+
+                attn2cls_res = {}
+                for k in pretrain_sent_att2cls_res:
+                    attn2cls_res[k] = {'pretrain_sent_pair': pretrain_sent_att2cls_res[k]['all']}
+                for k in pretrain_attr_att2cls_res:
+                    attn2cls_res[k]['pretrain_attr_pair'] = pretrain_attr_att2cls_res[k]['all']
+                for k in finetuned_sent_att2cls_res:
+                    attn2cls_res[k]['finetune_sent_pair'] = finetuned_sent_att2cls_res[k]['all']
+                for k in finetuned_attr_att2cls_res:
+                    attn2cls_res[k]['finetune_attr_pair'] = finetuned_attr_att2cls_res[k]['all']
+                out_fname = f"PLOT_ATT2CLS{is_entropy}CMP_{comparison}_{sampler_conf['size']}_{extractor_name}_{extr_params}.pdf"
 
             else:
                 raise ValueError("Wrong comparison variable.")
@@ -344,7 +437,7 @@ if __name__ == '__main__':
 
             # print("Target categories set to 'all'")
             # target_categories = ['all']
-            comparison = 'tok'     # 'tune', 'tok', 'tune_tok'
+            comparison = 'tok'  # 'tune', 'tok', 'tune_tok'
 
             if comparison == 'tune':
                 new_fine_tune = None
@@ -377,7 +470,8 @@ if __name__ == '__main__':
                 sentpair_e2e_res = compute_entity_to_entity_attention(use_cases, new_conf, sampler_conf, fine_tune,
                                                                       attn_params, RESULTS_DIR,
                                                                       analysis_type='cross_entity', ignore_special=True,
-                                                                      target_categories=['all_pred_pos', 'all_pred_neg'],
+                                                                      target_categories=['all_pred_pos',
+                                                                                         'all_pred_neg'],
                                                                       precomputed=True)
 
                 new_conf['tok'] = 'attr_pair'
@@ -385,7 +479,8 @@ if __name__ == '__main__':
                 attrpair_e2e_res = compute_entity_to_entity_attention(use_cases, new_conf, sampler_conf, fine_tune,
                                                                       attn_params, RESULTS_DIR,
                                                                       analysis_type='cross_entity', ignore_special=True,
-                                                                      target_categories=['all_pred_pos', 'all_pred_neg'],
+                                                                      target_categories=['all_pred_pos',
+                                                                                         'all_pred_neg'],
                                                                       precomputed=True)
 
                 e2e_res = {}
@@ -409,8 +504,8 @@ if __name__ == '__main__':
                                                                            target_categories=['all', 'all_pos',
                                                                                               'all_neg'],
                                                                            precomputed=True)
-                                                                           #extract_attention=True, save=True)
-                                                                           #target_categories=['all'])
+                # extract_attention=True, save=True)
+                # target_categories=['all'])
 
                 new_conf = conf.copy()
                 new_conf['tok'] = 'attr_pair'
@@ -422,8 +517,8 @@ if __name__ == '__main__':
                                                                            target_categories=['all', 'all_pos',
                                                                                               'all_neg'],
                                                                            precomputed=True)
-                                                                           #extract_attention=True, save=True)
-                                                                           #target_categories=['all'])
+                # extract_attention=True, save=True)
+                # target_categories=['all'])
 
                 new_fine_tune = 'simple'
                 new_conf['tok'] = 'sent_pair'
@@ -435,8 +530,8 @@ if __name__ == '__main__':
                                                                            target_categories=['all', 'all_pos',
                                                                                               'all_neg'],
                                                                            precomputed=True)
-                                                                           #extract_attention=True, save=True)
-                                                                           #target_categories=['all'])
+                # extract_attention=True, save=True)
+                # target_categories=['all'])
 
                 new_conf['tok'] = 'attr_pair'
                 print("Load finetuned attr_pair data")
@@ -447,8 +542,8 @@ if __name__ == '__main__':
                                                                            target_categories=['all', 'all_pos',
                                                                                               'all_neg'],
                                                                            precomputed=True)
-                                                                           #extract_attention=True, save=True)
-                                                                           #target_categories=['all'])
+                # extract_attention=True, save=True)
+                # target_categories=['all'])
 
                 e2e_res = {}
                 for k in pretrain_sent_e2e_res:
@@ -469,6 +564,99 @@ if __name__ == '__main__':
 
         out_file = os.path.join(RESULTS_DIR, out_fname)
         EntityToEntityAttentionAnalyzer.plot_multi_entity_to_entity_attn(e2e_res, save_path=out_file)
+
+    elif experiment in ['topk_attn_word', 'topk_word_attn_by_attr_similarity']:
+
+        extractor_name = attn_params['attn_extractor']
+        extr_params = attn_params["attn_extr_params"]["agg_metric"]
+
+        assert extractor_name == 'word_extractor'
+        target_layer = None
+        if experiment == 'topk_attn_word':
+            tag = 'POS'
+        else:
+            tag = 'SIM'
+        template_out_fname = f"{tag}_{conf['tok']}_{sampler_conf['size']}_{fine_tune}_{extractor_name}_{extr_params}"
+        precomputed = True
+
+        if not precomputed:
+
+            res_fname = os.path.join(RESULTS_DIR, f'RES_{template_out_fname}.pkl')
+            stats_data = execute_experiment_topk_attn_words(use_cases, conf, sampler_conf, fine_tune, attn_params,
+                                                            RESULTS_DIR, experiment, target_layer, save_path=res_fname)
+            out_plot_name = os.path.join(RESULTS_DIR, f'PLOT_{template_out_fname}.pdf')
+
+        else:
+            multi = True
+
+            if multi:
+                assert experiment == 'topk_word_attn_by_attr_similarity'
+                toks = ['sent_pair', 'attr_pair']
+                fine_tunes = ['simple', None]
+                confs = list(itertools.product(toks, fine_tunes))
+
+                stats_data = {}
+                for conf in confs:
+                    tok = conf[0]
+                    tune = conf[1]
+
+                    conf_name = ''
+                    if tune is None:
+                        conf_name += 'pretrain_'
+                    else:
+                        conf_name += 'finetune_'
+                    conf_name += tok.replace('_', '')
+
+                    # load the results
+                    res_fname = f"RES_{tag}_{tok}_{sampler_conf['size']}_{tune}_{extractor_name}_{extr_params}.pkl"
+                    conf_stats = pickle.load(open(os.path.join(RESULTS_DIR, res_fname), "rb"))
+
+                    if len(stats_data) == 0:
+                        stats_data.update(conf_stats)
+                        for uc in stats_data:
+                            stats_data[uc].columns = [conf_name]
+                    else:
+                        for uc in conf_stats:
+                            uc_df = conf_stats[uc]
+                            uc_df.columns = [conf_name]
+                            stats_data[uc] = pd.concat([stats_data[uc], uc_df], axis=1)
+                out_plot_name = os.path.join(RESULTS_DIR, f"MULTI_CONF_{tag}_topk_attn_words.pdf")
+
+            else:
+                # load the results
+                res_fname = f"RES_{template_out_fname}.pkl"
+                stats_data = pickle.load(open(os.path.join(RESULTS_DIR, res_fname), "rb"))
+                out_plot_name = f"PLOT_{template_out_fname}.pdf"
+                out_plot_name = os.path.join(RESULTS_DIR, out_plot_name)
+
+        # change use case labels
+        use_case_map = ConfCreator().use_case_map
+        stats_data = {use_case_map[uc]: stats_data[uc] for uc in stats_data}
+
+        if experiment == 'topk_attn_word':
+            ylabel = 'POS tags coverage'
+            plot_params = {'kind': 'area'}
+            TopKAttentionAnalyzer.plot_top_attn_stats(stats_data, plot_params=plot_params, out_plot_name=out_plot_name,
+                                                      ylabel=ylabel)
+        else:
+            agg_plot = True
+            ylabel = 'Accuracy'
+            plot_params = {'kind': 'line', 'marker': 'o'}
+            if len(list(stats_data.values())[0].columns) > 1:
+                legend = True
+                legend_position = (0.87, 0.05)
+            else:
+                legend = False
+                legend_position = None
+
+            if not agg_plot:
+                TopKAttentionAnalyzer.plot_top_attn_stats(stats_data, plot_params=plot_params,
+                                                          out_plot_name=out_plot_name, ylabel=ylabel, legend=legend,
+                                                          y_lim=(0, 1), legend_position=legend_position)
+            else:
+                agg_dim = 'layer'    # 'use_case', 'layer'
+                TopKAttentionAnalyzer.plot_agg_top_attn_stats(stats_data, agg_dim=agg_dim, ylabel=ylabel,
+                                                              out_plot_name=f'AGG_{agg_dim}_{out_plot_name}')
 
     else:
         raise NotImplementedError()
