@@ -53,8 +53,8 @@ def run_gradient_test(conf, sampler_conf, fine_tune, grad_params, models_dir, re
         special_tokens=grad_special_tokens,
         show_progress=True
     )
-    # out_fname = f"{use_case}_{tok}_{sampler_conf['size']}_{fine_tune}_{grad_text_unit}_{grad_special_tokens}"
-    out_fname = f"{use_case}_{tok}_{sampler_conf['size']}_{fine_tune}_{grad_text_unit}_{grad_special_tokens}_ALL"
+    out_fname = f"{use_case}_{tok}_{sampler_conf['size']}_{fine_tune}_{grad_text_unit}_{grad_special_tokens}"
+    # out_fname = f"{use_case}_{tok}_{sampler_conf['size']}_{fine_tune}_{grad_text_unit}_{grad_special_tokens}_ALL"
     out_dir = os.path.join(res_dir, use_case, out_fname)
     # save grads data
     entity_grad_extr.extract(sample, sample.max_len, out_path=out_dir)
@@ -67,14 +67,14 @@ def run_gradient_test(conf, sampler_conf, fine_tune, grad_params, models_dir, re
     #         raise NotImplementedError("No aggregation for non-attrs gradients.")
 
 
-def load_saved_grads_data(use_case, conf, sampler_conf, fine_tune, grad_conf):
+def load_saved_grads_data(use_case, conf, sampler_conf, fine_tune, grad_conf, res_dir):
     tok = conf['tok']
     size = sampler_conf['size']
     text_unit = grad_conf['text_unit']
     special_tokens = grad_conf['special_tokens']
-    # out_fname = f"{use_case}_{tok}_{size}_{fine_tune}_{text_unit}_{special_tokens}"
-    out_fname = f"{use_case}_{tok}_{size}_{fine_tune}_{text_unit}_{special_tokens}_ALL"
-    data_path = os.path.join(RESULT_DIR, use_case, out_fname)
+    out_fname = f"{use_case}_{tok}_{size}_{fine_tune}_{text_unit}_{special_tokens}"
+    # out_fname = f"{use_case}_{tok}_{size}_{fine_tune}_{text_unit}_{special_tokens}_ALL"
+    data_path = os.path.join(res_dir, use_case, out_fname)
     uc_grad = pickle.load(open(f"{data_path}.pkl", "rb"))
     return uc_grad
 
@@ -167,7 +167,7 @@ if __name__ == '__main__':
         else:
             ignore_special = True
             for use_case in use_cases:
-                uc_grad = load_saved_grads_data(use_case, conf, sampler_conf, fine_tune, grad_conf)
+                uc_grad = load_saved_grads_data(use_case, conf, sampler_conf, fine_tune, grad_conf, RESULT_DIR)
                 out_plot_name = os.path.join(RESULT_DIR, use_case,
                                              f"grad_{grad_conf['text_unit']}_{grad_conf['special_tokens']}")
                 plot_batch_grads(uc_grad, 'all', title_prefix=use_case, out_plot_name=out_plot_name,
@@ -179,7 +179,7 @@ if __name__ == '__main__':
 
         stats_data = []
         for use_case in use_cases:
-            uc_grad = load_saved_grads_data(use_case, conf, sampler_conf, fine_tune, grad_conf)
+            uc_grad = load_saved_grads_data(use_case, conf, sampler_conf, fine_tune, grad_conf, RESULT_DIR)
             if experiment == 'topk_word_grad':
                 analyzer = TopKGradientAnalyzer(uc_grad, topk=5)
                 analyzed_data = analyzer.analyze('pos', by_attr=False, target_categories=['all', 'all_pos', 'all_neg'])
