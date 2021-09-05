@@ -1029,7 +1029,7 @@ class TopKAttentionAnalyzer(object):
             if legend:
                 handles, labels = ax.get_legend_handles_labels()
                 if legend_position is None:
-                    legend_position = (0.73, 0.15)
+                    legend_position = (0.74, 0.05)
                 fig.legend(handles, labels, bbox_to_anchor=legend_position, ncol=4, fontsize=20)
         plt.subplots_adjust(wspace=0.1, hspace=0.6)
         if out_plot_name:
@@ -1038,7 +1038,8 @@ class TopKAttentionAnalyzer(object):
         plt.show()
 
     @staticmethod
-    def plot_agg_top_attn_stats(plot_data: dict, agg_dim: str, ylabel: str = None, out_plot_name: str = None):
+    def plot_agg_top_attn_stats(plot_data: dict, agg_dim: str, ylabel: str = None, out_plot_name: str = None,
+                                ylim: tuple = None):
 
         assert isinstance(plot_data, dict)
         assert isinstance(agg_dim, str)
@@ -1047,6 +1048,9 @@ class TopKAttentionAnalyzer(object):
             assert isinstance(ylabel, str)
         if out_plot_name is not None:
             assert isinstance(out_plot_name, str)
+        if ylim is not None:
+            assert isinstance(ylim, tuple)
+            assert len(ylim) == 2
 
         if agg_dim == 'layer':           # average the score across the layers
             first_item = list(plot_data.values())[0]
@@ -1058,15 +1062,6 @@ class TopKAttentionAnalyzer(object):
                 std_plot_data[idx, :] = plot_data[uc].values.std(axis=0)
             avg_plot_data_table = pd.DataFrame(avg_plot_data, index=plot_data.keys(), columns=columns)
             std_plot_data_table = pd.DataFrame(std_plot_data, index=plot_data.keys(), columns=columns)
-            avg_plot_data_table.plot(kind='bar', figsize=(12, 3), yerr=std_plot_data_table)
-            ax = plt.gca()
-            ax.set_ylim(0, 1)
-            plt.xticks(rotation=0)
-            plt.legend(ncol=4, loc='upper center')
-            if ylabel is not None:
-                plt.ylabel(ylabel)
-            plt.tight_layout()
-            plt.show()
 
         else:                   # average the scores across the use cases
             assert len(plot_data) > 1
@@ -1087,13 +1082,23 @@ class TopKAttentionAnalyzer(object):
                 std_plot_data[l, :] = std_layers_plot_data[l].std(axis=0)
             avg_plot_data_table = pd.DataFrame(avg_plot_data, index=tab_index, columns=columns)
             std_plot_data_table = pd.DataFrame(std_plot_data, index=tab_index, columns=columns)
-            avg_plot_data_table.plot(kind='bar', figsize=(12, 3), yerr=std_plot_data_table)
-            ax = plt.gca()
-            ax.set_ylim(0, 1)
-            plt.xticks(rotation=0)
-            plt.legend(ncol=4, loc='upper center')
-            if ylabel is not None:
-                plt.ylabel(ylabel)
-            plt.tight_layout()
-            plt.show()
+
+        avg_plot_data_table.plot(kind='bar', figsize=(12, 3), yerr=std_plot_data_table)
+        ax = plt.gca()
+        if ylim is not None:
+            ax.set_ylim(ylim[0], ylim[1])
+        plt.xticks(rotation=0)
+        plt.legend(ncol=4, loc='upper center')
+        if ylabel is not None:
+            plt.ylabel(ylabel)
+        if agg_dim == 'use_case':
+            plt.xlabel('Layers')
+        else:
+            plt.xlabel('Use cases')
+        plt.tight_layout()
+
+        if out_plot_name is not None:
+            plt.savefig(out_plot_name, bbox_inches='tight')
+
+        plt.show()
 

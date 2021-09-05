@@ -238,7 +238,7 @@ if __name__ == '__main__':
     conf = {
         'data_type': 'train',  # 'train', 'test', 'valid'
         'model_name': 'bert-base-uncased',
-        'tok': 'sent_pair',  # 'sent_pair', 'attr', 'attr_pair'
+        'tok': 'attr_pair',  # 'sent_pair', 'attr', 'attr_pair'
         'label_col': 'label',
         'left_prefix': 'left_',
         'right_prefix': 'right_',
@@ -253,7 +253,7 @@ if __name__ == '__main__':
         'seeds': [42, 42],  # [42 -> class 0, 42 -> class 1]
     }
 
-    fine_tune = None  # None, 'simple', 'advanced'
+    fine_tune = 'simple'  # None, 'simple', 'advanced'
 
     attn_params = {
         'attn_extractor': 'word_extractor',  # 'attr_extractor', 'word_extractor', 'token_extractor'
@@ -264,7 +264,7 @@ if __name__ == '__main__':
     # 'compute_attn', 'attr_to_cls', 'attr_to_cls_entropy', 'word_to_cls', 'entity_to_entity', 'topk_attn_word',
     # 'topk_word_attn_by_attr_similarity'
 
-    experiment = 'topk_word_attn_by_attr_similarity'
+    experiment = 'topk_attn_word'
     sub_experiment = 'comparison'  # 'simple', 'comparison'
 
     # [END] INPUT PARAMS -----------------------------------------------------------------------------------------------
@@ -612,9 +612,11 @@ if __name__ == '__main__':
                     conf_stats = pickle.load(open(os.path.join(RESULTS_DIR, res_fname), "rb"))
 
                     if len(stats_data) == 0:
-                        stats_data.update(conf_stats)
-                        for uc in stats_data:
-                            stats_data[uc].columns = [conf_name]
+                        for uc in conf_stats:
+                            uc_df = conf_stats[uc]
+                            uc_df.columns = [conf_name]
+                            stats_data[uc] = uc_df
+
                     else:
                         for uc in conf_stats:
                             uc_df = conf_stats[uc]
@@ -634,10 +636,18 @@ if __name__ == '__main__':
         stats_data = {use_case_map[uc]: stats_data[uc] for uc in stats_data}
 
         if experiment == 'topk_attn_word':
-            ylabel = 'POS tags coverage'
+            agg_plot = True
+            ylabel = 'POS tags cov.'
             plot_params = {'kind': 'area'}
-            TopKAttentionAnalyzer.plot_top_attn_stats(stats_data, plot_params=plot_params, out_plot_name=out_plot_name,
-                                                      ylabel=ylabel)
+
+            if not agg_plot:
+                TopKAttentionAnalyzer.plot_top_attn_stats(stats_data, plot_params=plot_params,
+                                                          out_plot_name=out_plot_name, ylabel=ylabel)
+            else:
+                agg_dim = 'layer'    # 'use_case', 'layer'
+                out_plot_name = f'{out_plot_name.replace(".pdf", f"_AGG_{agg_dim}.pdf")}'
+                TopKAttentionAnalyzer.plot_agg_top_attn_stats(stats_data, agg_dim=agg_dim, ylabel=ylabel,
+                                                              out_plot_name=out_plot_name, ylim=(0, 100))
         else:
             agg_plot = True
             ylabel = 'Accuracy'
@@ -655,8 +665,9 @@ if __name__ == '__main__':
                                                           y_lim=(0, 1), legend_position=legend_position)
             else:
                 agg_dim = 'layer'    # 'use_case', 'layer'
+                out_plot_name = f'{out_plot_name.replace(".pdf", f"_AGG_{agg_dim}.pdf")}'
                 TopKAttentionAnalyzer.plot_agg_top_attn_stats(stats_data, agg_dim=agg_dim, ylabel=ylabel,
-                                                              out_plot_name=f'AGG_{agg_dim}_{out_plot_name}')
+                                                              out_plot_name=out_plot_name, ylim=(0, 1))
 
     else:
         raise NotImplementedError()
