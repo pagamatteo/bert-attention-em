@@ -185,12 +185,9 @@ def compute_benchmark_correlations(use_cases: list, conf: dict, sampler_conf: di
     return out_results
 
 
-def plot_corr_distribution(correlation_results: dict, ylabel: str, ylim: tuple = None, save_path: str = None):
+def plot_corr_distribution(correlation_results: dict, ylabel: str, save_path: str = None):
     assert isinstance(correlation_results, dict)
     assert isinstance(ylabel, str)
-    if ylim is not None:
-        assert isinstance(ylim, tuple)
-        assert len(ylim) == 2
     if save_path is not None:
         assert isinstance(save_path, str)
     xlabel = 'Layers'
@@ -215,10 +212,12 @@ def plot_corr_distribution(correlation_results: dict, ylabel: str, ylim: tuple =
 
         ncols = 4
         nrows = 3
+        figsize = (20, 10)
         if len(cat_corr_res) == 1:
             ncols = 1
             nrows = 1
-        fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(20, 10), sharey=True)
+            figsize = (12, 3)
+        fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=figsize, sharey=True)
         if len(cat_corr_res) > 1:
             axes = axes.flat
         for idx, use_case in enumerate(cat_corr_res):
@@ -241,10 +240,8 @@ def plot_corr_distribution(correlation_results: dict, ylabel: str, ylim: tuple =
             ax.set_xlabel(xlabel, fontsize=20)
             ax.xaxis.set_tick_params(labelsize=18)
             ax.yaxis.set_tick_params(labelsize=20)
-            # if len(use_case_corr) > 1:
-            #     ax.set_xticks(list(use_case_corr.index)[::2])
-            if ylim is not None:
-                ax.set_ylim(ylim[0], ylim[1])
+            ax.set_ylim(-1, 1)
+            ax.set_yticks(np.arange(-1, 1.1, 0.5))
 
         # if len(cat_corr_res) > 1:
         #     handles, labels = ax.get_legend_handles_labels()
@@ -295,7 +292,7 @@ if __name__ == '__main__':
         'attn_extr_params': {'special_tokens': True, 'agg_metric': 'mean'},
     }
 
-    target_layer = None
+    target_layer = 11
     target_categories = ['all']
 
     precomputed = True
@@ -317,6 +314,6 @@ if __name__ == '__main__':
     raw_rank_results = all_corr_results['raw_rank']
 
     save_path_corr_plot = os.path.join(RESULTS_DIR, f'PLOT_DISTR_attn_vs_grad_corr_l={target_layer}.pdf')
-    plot_corr_distribution(raw_corr_results, ylabel='Corr.', ylim=(-1.1, 1.1), save_path=save_path_corr_plot)
-    plot_corr_distribution(raw_rank_results, ylabel='Kendall rank corr.', ylim=(-1.1, 1.1),
+    plot_corr_distribution(raw_corr_results, ylabel='Corr.', save_path=save_path_corr_plot)
+    plot_corr_distribution(raw_rank_results, ylabel='Kendall rank corr.',
                            save_path=save_path_corr_plot.replace("_corr_", "_rank_"))
