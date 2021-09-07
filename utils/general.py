@@ -3,14 +3,17 @@ import pandas as pd
 from transformers import AutoModel, AutoModelForSequenceClassification
 from pathlib import Path
 from collections import OrderedDict
+from tqdm import tqdm
 
 from utils.data_collector import DataCollector
 from core.data_models.em_dataset import EMDataset
 from utils.data_selection import Sampler
 from utils.fine_tuning.advanced_fine_tuning import MatcherTransformer
 from core.attention.extractors import AttributeAttentionExtractor, WordAttentionExtractor, AttentionExtractor
-from core.attention.testers import GenericAttributeAttentionTest
+from core.attention.testers import GenericAttributeAttentionTest, AttributeAttentionPatternFreqTest
 from core.attention.analyzers import AttentionMapAnalyzer
+from utils.nlp import get_pos_tag
+
 
 PROJECT_DIR = Path(__file__).parent.parent
 MODELS_DIR = os.path.join(PROJECT_DIR, 'results', 'models')
@@ -146,7 +149,7 @@ def get_extractors(extractor_params: dict):
 
 def get_testers(tester_params: dict):
     assert isinstance(tester_params, dict), "Wrong data type for parameter 'tester_params'."
-    available_testers = ['attr_tester']
+    available_testers = ['attr_tester', 'attr_pattern_tester']
     for t in tester_params:
         assert t in available_testers, f"Wrong value for parameter 'tester_params' ({available_testers})."
         assert isinstance(tester_params[t], dict), "Wrong value for parameter 'tester_params'."
@@ -161,6 +164,14 @@ def get_testers(tester_params: dict):
             assert all([p in params for p in tester_param]), "Wrong value for attr_tester."
 
             attn_tester = GenericAttributeAttentionTest(**tester_param)
+
+        elif tester_name == 'attr_pattern_tester':
+
+            tester_param = tester_params[tester_name]
+            params = ['ignore_special']
+            assert all([p in params for p in tester_param]), "Wrong value for attr_pattern_tester."
+
+            attn_tester = AttributeAttentionPatternFreqTest(**tester_param)
 
         else:
             raise NotImplementedError()
@@ -222,6 +233,8 @@ def get_pipeline(conf):
         }
         tester_param.update(conf['tester']['tester_params'])
         tester_params[tester_name] = tester_param
+    elif tester_name == 'attr_pattern_tester':
+        tester_params[tester_name] = conf['tester']['tester_params'].copy()
     else:
         raise ValueError("Wrong tester name.")
 
@@ -273,3 +286,52 @@ def get_benchmark_avg_attr_len(use_cases, conf, sampler_conf, pair_mode=False, t
                                                      left_prefix=conf['left_prefix'], right_prefix=conf['right_prefix'])
 
     return avg_attr_len
+
+
+def get_use_case_pos_tag_distr(df, pos_model):
+    pos_tags_distr = {}
+    num_words = 0
+
+    for idx in tqdm(range(len(df))):
+        row = df.iloc[idx]
+        row_text = ''
+        for attr, val in row.iteritems():
+            if not pd.isnull(val):
+                row_text += f'{str(val)}'
+
+        row_text = pos_model(row_text)
+
+        num_words += len(row_text)
+        for word_idx, word in enumerate(row_text):
+            pos_tag = get_pos_tag(word)
+            if pos_tag not in pos_tags_distr:
+                pos_tags_distr[pos_tag] = 1
+            else:
+                pos_tags_distr[pos_tag] += 1
+
+    norm_pos_tags = {}
+    for k in pos_tags_distr:
+        norm_pos_tags[k] = pos_tags_distr[k] / num_words
+
+    return pd.Series(norm_pos_tags)
+
+
+def get_benchmark_pos_tag_distr(use_cases, conf, sampler_conf, pos_model):
+    dfs = []
+    for use_case in use_cases:
+        uc_conf = conf.copy()
+        uc_conf['use_case'] = use_case
+        dataset = get_dataset(uc_conf)
+        uc_sampler_conf = sampler_conf.copy()
+        uc_sampler_conf['permute'] = uc_conf['permute']
+        sample = get_sample(dataset, uc_sampler_conf).get_complete_data()
+        dfs.append(sample)
+
+    pos_tag_distr = {}
+    tags = ['TEXT', 'PUNCT', 'NUM&SYM', 'CONN']
+    for uc_idx in range(len(use_cases)):
+        uc = use_cases[uc_idx]
+        df = dfs[uc_idx]
+        pos_tag_distr[uc] = get_use_case_pos_tag_distr(df, pos_model)
+
+    return pd.DataFrame.from_dict(pos_tag_distr, orient='index')[tags]
