@@ -76,14 +76,21 @@ class TestResultCollector(object):
 
         return self.__copy__()
 
-    def transform_collector(self, res_collector, transform_fn):
+    def transform_collector(self, res_collector, transform_fn, ignore_res_ids: list = None):
 
         assert isinstance(res_collector, type(self)), "Wrong data type for parameter 'res_collector'."
         assert len(self) == len(res_collector), "Result collectors not compatible: different len."
         input_results = res_collector.get_results()
         assert set(self.results) == set(input_results), "Result collectors not compatible: different result ids."
+        if ignore_res_ids is not None:
+            assert isinstance(ignore_res_ids, list)
+            assert len(ignore_res_ids) > 0
+            assert all([isinstance(v, str) for v in ignore_res_ids])
 
         for result_name in list(self.results):
+
+            if ignore_res_ids is not None and result_name not in ignore_res_ids:
+                continue
 
             if isinstance(self.results[result_name], np.ndarray) and isinstance(input_results[result_name], np.ndarray):
                 left_shape = self.results[result_name].shape
@@ -101,6 +108,9 @@ class TestResultCollector(object):
                     extended_right[:right_shape[0], :right_shape[1]] = input_results[result_name][:]
 
                     self.results[result_name] = transform_fn(extended_left, extended_right)
+
+            else:
+                self.results[result_name] = transform_fn(self.results[result_name], input_results[result_name])
 
 
 class BinaryClassificationResultsAggregator(object):

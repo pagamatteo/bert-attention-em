@@ -153,6 +153,7 @@ if __name__ == '__main__':
                  "Structured_Amazon-Google", "Structured_Walmart-Amazon", "Structured_Beer",
                  "Structured_iTunes-Amazon", "Textual_Abt-Buy", "Dirty_iTunes-Amazon", "Dirty_DBLP-ACM",
                  "Dirty_DBLP-GoogleScholar", "Dirty_Walmart-Amazon"]
+    use_cases = ["Structured_DBLP-GoogleScholar"]
 
     fixed_params = {
         'label_col': 'label',
@@ -168,19 +169,19 @@ if __name__ == '__main__':
         'data_type': ['train'],  #['train', 'test'],
         'permute': [False],
         'model_name': ['bert-base-uncased'],
-        'tok': ['attr_pair'],  # 'sent_pair', 'attr', 'attr_pair'
+        'tok': ['sent_pair'],  # 'sent_pair', 'attr', 'attr_pair'
         'size': [None],
         'target_class': ['both'],  # 'both', 0, 1
         'fine_tune_method': [None],  # None, 'simple', 'advanced'
         'extractor': [
             {
-                'attn_extractor': 'attr_extractor',     # word_extractor
-                'attn_extr_params': {'special_tokens': True, 'agg_metric': 'max'},
+                'attn_extractor': 'attr_extractor',     # 'word_extractor'
+                'attn_extr_params': {'special_tokens': True, 'agg_metric': 'mean'},
             }
         ],
         'tester': [
             {
-                'tester': 'attr_tester',
+                'tester': 'attr_pattern_tester',    # 'attr_tester', 'attr_pattern_tester'
                 'tester_params': {'ignore_special': True}
             }
         ],
@@ -192,7 +193,7 @@ if __name__ == '__main__':
     for conf in confs:
         conf.update(fixed_params)
 
-    save = True
+    save = False
     num_attempts = len(variable_params['seeds'])
 
     run(confs, num_attempts, save)

@@ -11,7 +11,6 @@ from utils.test_utils import ConfCreator
 from utils.general import get_testers
 
 
-
 PROJECT_DIR = Path(__file__).parent.parent.parent
 RESULTS_DIR = os.path.join(PROJECT_DIR, 'results', 'attention')
 
