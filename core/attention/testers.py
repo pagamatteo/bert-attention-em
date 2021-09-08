@@ -558,8 +558,6 @@ class AttributeAttentionPatternFreqTest(object):
         assert isinstance(ignore_special, bool), "Wrong data type for parameter 'ignore_special'."
 
         self.ignore_special = ignore_special
-        self.patterns_by_layer = {}
-        self.quadrant_patterns_by_layer = {}
 
     @staticmethod
     def test_attr_attention_patterns(attn_map: np.ndarray):
@@ -749,6 +747,8 @@ class AttributeAttentionPatternFreqTest(object):
 
             return norm_tot, norm_avg, norm_std
 
+        patterns_by_layer = {}
+        quadrant_patterns_by_layer = {}
 
         AttributeAttentionExtractor.check_attn_features((left_entity, right_entity, attn_params))
         attr_attns = attn_params['attns']
@@ -779,23 +779,23 @@ class AttributeAttentionPatternFreqTest(object):
                 attn_map_patterns = AttributeAttentionPatternFreqTest.test_attr_attention_patterns(attn_map)
 
                 # save the results
-                if layer not in self.patterns_by_layer:
-                    self.patterns_by_layer[layer] = attn_map_patterns['all']
-                    self.quadrant_patterns_by_layer[layer] = attn_map_patterns['quadrants']
+                if layer not in patterns_by_layer:
+                    patterns_by_layer[layer] = attn_map_patterns['all']
+                    quadrant_patterns_by_layer[layer] = attn_map_patterns['quadrants']
                 else:
-                    self.patterns_by_layer[layer] = self.patterns_by_layer[layer].update(attn_map_patterns['all'])
-                    self.quadrant_patterns_by_layer[layer] = [
-                        self.quadrant_patterns_by_layer[layer][i].update(q_pattern) for i, q_pattern in
+                    patterns_by_layer[layer] = patterns_by_layer[layer].update(attn_map_patterns['all'])
+                    quadrant_patterns_by_layer[layer] = [
+                        quadrant_patterns_by_layer[layer][i].update(q_pattern) for i, q_pattern in
                         enumerate(attn_map_patterns['quadrants'])]
 
-        layer_patterns = self.patterns_by_layer[0]
-        for i in range(1, len(self.patterns_by_layer)):
-            layer_patterns = layer_patterns.concat(self.patterns_by_layer[i])
+        layer_patterns = patterns_by_layer[0]
+        for i in range(1, len(patterns_by_layer)):
+            layer_patterns = layer_patterns.concat(patterns_by_layer[i])
         quadrant_layer_patterns = []
         for i in range(4):
-            q = self.quadrant_patterns_by_layer[0][i]
-            for l in range(1, len(self.quadrant_patterns_by_layer)):
-                q = q.concat(self.quadrant_patterns_by_layer[l][i])
+            q = quadrant_patterns_by_layer[0][i]
+            for l in range(1, len(quadrant_patterns_by_layer)):
+                q = q.concat(quadrant_patterns_by_layer[l][i])
             quadrant_layer_patterns.append(q)
 
         # normalize the pattern frequencies
@@ -825,5 +825,8 @@ class AttributeAttentionPatternFreqTest(object):
             res_collector = q_tot.save_data(res_collector, f'tot_q{i}', ignore_metrics=['avg', 'entropy'])
             res_collector = q_avg.save_data(res_collector, f'avg_q{i}')
             res_collector = q_std.save_data(res_collector, f'std_q{i}')
+
+        for k, v in res_collector.get_results().items():
+            assert not (v > 100).any()
 
         return res_collector

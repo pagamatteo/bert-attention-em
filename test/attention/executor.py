@@ -71,6 +71,8 @@ def run(confs: list, num_attempts: int, save: bool):
             extractor_params = '_'.join([f'{x[0]}={x[1]}' for x in conf['extractor']['attn_extr_params'].items()])
             tester_name = conf['tester']['tester']
             tester_params = '_'.join([f'{x[0]}={x[1]}' for x in conf['tester']['tester_params'].items()])
+            if tester_name == 'attr_pattern_tester':
+                tester_name = 'attr_patt_tester'
             template_file_name = 'ANALYSIS_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}'.format(use_case, conf['data_type'],
                                                                                     extractor_name, tester_name,
                                                                                     conf['fine_tune_method'],
@@ -153,7 +155,6 @@ if __name__ == '__main__':
                  "Structured_Amazon-Google", "Structured_Walmart-Amazon", "Structured_Beer",
                  "Structured_iTunes-Amazon", "Textual_Abt-Buy", "Dirty_iTunes-Amazon", "Dirty_DBLP-ACM",
                  "Dirty_DBLP-GoogleScholar", "Dirty_Walmart-Amazon"]
-    use_cases = ["Structured_DBLP-GoogleScholar"]
 
     fixed_params = {
         'label_col': 'label',
@@ -172,7 +173,7 @@ if __name__ == '__main__':
         'tok': ['sent_pair'],  # 'sent_pair', 'attr', 'attr_pair'
         'size': [None],
         'target_class': ['both'],  # 'both', 0, 1
-        'fine_tune_method': [None],  # None, 'simple', 'advanced'
+        'fine_tune_method': ['simple'],  # None, 'simple', 'advanced'
         'extractor': [
             {
                 'attn_extractor': 'attr_extractor',     # 'word_extractor'
@@ -193,7 +194,7 @@ if __name__ == '__main__':
     for conf in confs:
         conf.update(fixed_params)
 
-    save = False
+    save = True
     num_attempts = len(variable_params['seeds'])
 
     run(confs, num_attempts, save)

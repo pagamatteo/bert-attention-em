@@ -18,7 +18,7 @@ class ConfCreator(object):
                 'attn_extr_params': ['special_tokens', 'agg_metric'],
             },
             'tester': {
-                'tester': ['attr_tester'],
+                'tester': ['attr_tester', 'attr_pattern_tester'],
                 'tester_params': ['ignore_special']
             },
         }
