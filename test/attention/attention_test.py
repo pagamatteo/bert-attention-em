@@ -182,7 +182,7 @@ def execute_experiment_topk_attn_words(use_cases, conf, sampler_conf, fine_tune,
             target_categories = ['all']
             assert len(target_categories) == 1
 
-            analyzer = TopKAttentionAnalyzer(uc_attn, topk=5, tokenization=conf['tok'])
+            analyzer = TopKAttentionAnalyzer(uc_attn, topk_method='quantile', tokenization=conf['tok'])
             analyzed_data = analyzer.analyze('pos', by_attr=False, target_categories=target_categories,
                                              target_layer=target_layer)
 
@@ -233,12 +233,13 @@ if __name__ == '__main__':
                  "Structured_Amazon-Google", "Structured_Walmart-Amazon", "Structured_Beer",
                  "Structured_iTunes-Amazon", "Textual_Abt-Buy", "Dirty_iTunes-Amazon", "Dirty_DBLP-ACM",
                  "Dirty_DBLP-GoogleScholar", "Dirty_Walmart-Amazon"]
+    # use_cases = ["Structured_Fodors-Zagats"]
 
     # [BEGIN] INPUT PARAMS ---------------------------------------------------------------------------------------------
     conf = {
         'data_type': 'train',  # 'train', 'test', 'valid'
         'model_name': 'bert-base-uncased',
-        'tok': 'attr_pair',  # 'sent_pair', 'attr', 'attr_pair'
+        'tok': 'sent_pair',  # 'sent_pair', 'attr', 'attr_pair'
         'label_col': 'label',
         'left_prefix': 'left_',
         'right_prefix': 'right_',
@@ -577,7 +578,11 @@ if __name__ == '__main__':
         else:
             tag = 'SIM'
         template_out_fname = f"{tag}_{conf['tok']}_{sampler_conf['size']}_{fine_tune}_{extractor_name}_{extr_params}"
+
+        # SET THIS PARAMS
         precomputed = True
+        multi = True
+        pos_cat = 'TEXT'    # 'TEXT', 'PUNCT', 'NUM&SYM', 'CONN'
 
         if not precomputed:
 
@@ -587,10 +592,8 @@ if __name__ == '__main__':
             out_plot_name = os.path.join(RESULTS_DIR, f'PLOT_{template_out_fname}.pdf')
 
         else:
-            multi = True
 
             if multi:
-                assert experiment == 'topk_word_attn_by_attr_similarity'
                 toks = ['sent_pair', 'attr_pair']
                 fine_tunes = ['simple', None]
                 confs = list(itertools.product(toks, fine_tunes))
@@ -613,13 +616,21 @@ if __name__ == '__main__':
 
                     if len(stats_data) == 0:
                         for uc in conf_stats:
-                            uc_df = conf_stats[uc]
+                            if experiment == 'topk_word_attn_by_attr_similarity':
+                                uc_df = conf_stats[uc]
+                            else:
+                                uc_df = conf_stats[uc][[pos_cat]]
+
                             uc_df.columns = [conf_name]
                             stats_data[uc] = uc_df
 
                     else:
                         for uc in conf_stats:
-                            uc_df = conf_stats[uc]
+                            if experiment == 'topk_word_attn_by_attr_similarity':
+                                uc_df = conf_stats[uc]
+                            else:
+                                uc_df = conf_stats[uc][[pos_cat]]
+
                             uc_df.columns = [conf_name]
                             stats_data[uc] = pd.concat([stats_data[uc], uc_df], axis=1)
                 out_plot_name = os.path.join(RESULTS_DIR, f"MULTI_CONF_{tag}_topk_attn_words.pdf")
@@ -638,13 +649,15 @@ if __name__ == '__main__':
         if experiment == 'topk_attn_word':
             agg_plot = True
             ylabel = 'POS tags cov.'
+            if multi:
+                ylabel = f'{pos_cat} tag cov.'
             plot_params = {'kind': 'area'}
 
             if not agg_plot:
-                TopKAttentionAnalyzer.plot_top_attn_stats(stats_data, plot_params=plot_params,
-                                                          out_plot_name=out_plot_name, ylabel=ylabel)
+                TopKAttentionAnalyzer.plot_top_attn_stats(stats_data, plot_params=plot_params, ylabel=ylabel,
+                                                          out_plot_name=out_plot_name)
             else:
-                agg_dim = 'layer'    # 'use_case', 'layer'
+                agg_dim = 'use_case'    # 'use_case', 'layer'
                 out_plot_name = f'{out_plot_name.replace(".pdf", f"_AGG_{agg_dim}.pdf")}'
                 TopKAttentionAnalyzer.plot_agg_top_attn_stats(stats_data, agg_dim=agg_dim, ylabel=ylabel,
                                                               out_plot_name=out_plot_name, ylim=(0, 100))
@@ -664,7 +677,7 @@ if __name__ == '__main__':
                                                           out_plot_name=out_plot_name, ylabel=ylabel, legend=legend,
                                                           y_lim=(0, 1), legend_position=legend_position)
             else:
-                agg_dim = 'layer'    # 'use_case', 'layer'
+                agg_dim = 'use_case'    # 'use_case', 'layer'
                 out_plot_name = f'{out_plot_name.replace(".pdf", f"_AGG_{agg_dim}.pdf")}'
                 TopKAttentionAnalyzer.plot_agg_top_attn_stats(stats_data, agg_dim=agg_dim, ylabel=ylabel,
                                                               out_plot_name=out_plot_name, ylim=(0, 1))

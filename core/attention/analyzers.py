@@ -648,9 +648,17 @@ class EntityToEntityAttentionAnalyzer(object):
 
 
 class TopKAttentionAnalyzer(object):
-    def __init__(self, attns: list, topk: int, tokenization: str):
+    def __init__(self, attns: list, topk: int = None, topk_method: str = None, tokenization: str = 'sent_pair'):
         WordAttentionExtractor.check_batch_attn_features(attns)
-        assert isinstance(topk, int), "Wrong data type for parameter 'topk'."
+        if topk is not None:
+            assert isinstance(topk, int), "Wrong data type for parameter 'topk'."
+        if topk_method is not None:
+            assert isinstance(topk_method, str)
+            assert topk_method in ['quantile']
+        if topk is None:
+            assert topk_method is not None
+        else:
+            assert topk_method is None
         assert isinstance(tokenization, str)
         assert tokenization in ['sent_pair', 'attr_pair']
 
@@ -713,22 +721,49 @@ class TopKAttentionAnalyzer(object):
 
         self.attn_data = attn_data
         self.topk = topk
+        self.topk_method = topk_method
         self.tokenization = tokenization
         self.analysis_types = ['pos', 'str_type', 'sim']
         self.pos_model = spacy.load('en_core_web_sm')
         self.pos_model.tokenizer = Tokenizer(self.pos_model.vocab, token_match=re.compile(r'\S+').match)
 
     @staticmethod
-    def get_topk_text_units(attn_record: dict, topk: int):
+    def get_topk_text_units(attn_record: dict, topk: int = None, topk_method: str = None):
         assert isinstance(attn_record, dict), "Wrong data type for parameter 'attn_record'."
         assert all([p in attn_record for p in ['text_units', 'values']])
-        assert isinstance(topk, int), "Wrong data type for parameter 'topk'."
+        if topk is not None:
+            assert isinstance(topk, int), "Wrong data type for parameter 'topk'."
+        if topk_method is not None:
+            assert isinstance(topk_method, str)
+            assert topk_method in ['quantile']
+        if topk is None:
+            assert topk_method is not None
+        else:
+            assert topk_method is None
 
         text_units = attn_record['text_units']
         attns = attn_record['values']
         assert len(text_units) == len(attns)
-        top_words = list(sorted(zip(attns, text_units), key=lambda x: x[0], reverse=True))[:topk]
-        topk_words_idx = np.array(attns).argsort()[-topk:][::-1]
+
+        if topk is not None:
+            top_words = list(sorted(zip(attns, text_units), key=lambda x: x[0], reverse=True))[:topk]
+            new_topk = topk
+        else:
+            if topk_method == 'quantile':
+                thr = np.quantile(attns, 0.8)
+                idxs = np.where(attns >= thr)[0]
+                words = [(attns[i], text_units[i]) for i in idxs]
+                top_words = list(sorted(words, key=lambda x: x[0], reverse=True))
+                if len(top_words) > int(len(attns) * 0.2):
+                    new_topk = int(len(attns) * 0.2)
+                    top_words = top_words[:new_topk]
+                else:
+                    new_topk = len(top_words)
+            else:
+                raise ValueError("No method found.")
+
+        topk_words_idx = np.array(attns).argsort()[-new_topk:][::-1]
+
         return {'sent': {'text_units': [t[1] for t in top_words], 'values': [t[0] for t in top_words],
                          'idxs': topk_words_idx, 'original_text': text_units}}
 
@@ -793,8 +828,8 @@ class TopKAttentionAnalyzer(object):
         return all_topk
 
     @staticmethod
-    def get_topk(data: list, target_key: str, topk: int, tok: str, by_attr: bool, target_categories: list = None,
-                 pair_mode: bool = False):
+    def get_topk(data: list, target_key: str, tok: str, by_attr: bool, target_categories: list = None,
+                 topk: int = None, topk_method: str = None, pair_mode: bool = False):
 
         aggregator = BinaryClassificationResultsAggregator(target_key, target_categories=target_categories)
         agg_attn_data, _, _, _ = aggregator.add_batch_data(data)
@@ -815,7 +850,7 @@ class TopKAttentionAnalyzer(object):
                                                                                                  topk=topk,
                                                                                                  pair_mode=pair_mode)
                 else:
-                    top_words = TopKAttentionAnalyzer.get_topk_text_units(attn_data, topk=topk)
+                    top_words = TopKAttentionAnalyzer.get_topk_text_units(attn_data, topk=topk, topk_method=topk_method)
 
                 if cat not in top_word_by_cat:
                     top_word_by_cat[cat] = [top_words]
@@ -846,8 +881,10 @@ class TopKAttentionAnalyzer(object):
                 if layer != target_layer:
                     continue
 
-            top_words_by_cat = TopKAttentionAnalyzer.get_topk(layer_attn_data, 'attns', self.topk, self.tokenization,
-                                                              by_attr, target_categories, pair_mode=pair_mode)
+            top_words_by_cat = TopKAttentionAnalyzer.get_topk(data=layer_attn_data, target_key='attns',
+                                                              tok=self.tokenization, by_attr=by_attr,
+                                                              target_categories=target_categories, topk=self.topk,
+                                                              topk_method=self.topk_method, pair_mode=pair_mode)
 
             top_results = {}
             # loop over the data categories (e.g., match, non-match, fp, etc.)
