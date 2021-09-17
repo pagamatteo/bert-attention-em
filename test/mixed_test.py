@@ -208,7 +208,7 @@ def plot_corr_distribution(correlation_results: dict, ylabel: str, save_path: st
                 uc_res = cat_corr_res[uc].values.reshape(-1)
                 concat_res[:len(uc_res), j] = uc_res
             cat_corr_res = {'': pd.DataFrame(concat_res, columns=cat_corr_res.keys())}
-            xlabel = 'Use cases'
+            xlabel = 'Datasets'
 
         ncols = 4
         nrows = 3

@@ -173,7 +173,7 @@ if __name__ == '__main__':
         'tok': ['sent_pair'],  # 'sent_pair', 'attr', 'attr_pair'
         'size': [None],
         'target_class': ['both'],  # 'both', 0, 1
-        'fine_tune_method': ['simple'],  # None, 'simple', 'advanced'
+        'fine_tune_method': [None],  # None, 'simple', 'advanced'
         'extractor': [
             {
                 'attn_extractor': 'attr_extractor',     # 'word_extractor'
@@ -182,7 +182,7 @@ if __name__ == '__main__':
         ],
         'tester': [
             {
-                'tester': 'attr_pattern_tester',    # 'attr_tester', 'attr_pattern_tester'
+                'tester': 'attr_tester',    # 'attr_tester', 'attr_pattern_tester'
                 'tester_params': {'ignore_special': True}
             }
         ],
