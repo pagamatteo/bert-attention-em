@@ -361,7 +361,7 @@ class AttrToClsAttentionAnalyzer(object):
         plt.show()
 
     @staticmethod
-    def plot_attr_to_cls_attn(attr2cls_attn, ax=None, title=None):
+    def plot_attr_to_cls_attn(attr2cls_attn, ax=None, title=None, legend=True):
         AttrToClsAttentionAnalyzer.check_attr_to_cls_attn_results(attr2cls_attn)
 
         if ax is None:
@@ -385,7 +385,7 @@ class AttrToClsAttentionAnalyzer(object):
             if cat == 'all_pred_neg' or cat == 'all_neg':
                 plot_cat = 'non-match'
 
-            ax.errorbar(**plot_data, alpha=.75, fmt=':', capsize=3, capthick=1, label=plot_cat)
+            ax.errorbar(**plot_data, alpha=.75, fmt='o-', capsize=6, label=plot_cat)
             # plot_data_area = {
             #     'x': plot_data['x'],
             #     'y1': percs_25,
@@ -394,37 +394,60 @@ class AttrToClsAttentionAnalyzer(object):
             # ax.fill_between(**plot_data_area, alpha=.25)
             ax.set_xticks(range(len(attr2cls_attn_by_cat.columns)))
             ax.set_xticklabels(attr2cls_attn_by_cat.columns, rotation=45)
-            ax.legend()
+            # ax.xaxis.set_tick_params(labelsize=14)
+            ax.yaxis.set_tick_params(labelsize=16)
+            if legend:
+                ax.legend()
 
         if title is not None:
-            ax.set_title(title)
-        ax.set_xlabel('Attributes')
+            ax.set_title(title, fontsize=18)
+        # ax.set_xlabel('Attributes')
 
     @staticmethod
-    def plot_multi_attr_to_cls_attn(attr2cls_attn: dict, save_path: str = None):
+    def plot_multi_attr_to_cls_attn(attr2cls_attn: dict, small_plot: bool = False, save_path: str = None):
 
         assert isinstance(attr2cls_attn, dict)
 
         ncols = 4
         nrows = 3
+        figsize = (21, 12)
+
+        if small_plot:
+            ncols = 4
+            nrows = 1
+            figsize = (20, 4)
+
         if len(attr2cls_attn) == 1:
             ncols = 1
             nrows = 1
-        fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(20, 12), sharey=True)
+        fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=figsize, sharey=True)
         if len(attr2cls_attn) > 1:
             axes = axes.flat
         # loop over the use cases
         for idx, use_case in enumerate(attr2cls_attn):
             if len(attr2cls_attn) == 1:
                 ax = axes
+                legend = True
             else:
                 ax = axes[idx]
-            AttrToClsAttentionAnalyzer.plot_attr_to_cls_attn(attr2cls_attn[use_case], ax=ax, title=use_case)
+                legend = False
+            AttrToClsAttentionAnalyzer.plot_attr_to_cls_attn(attr2cls_attn[use_case], ax=ax, title=use_case,
+                                                             legend=legend)
             if idx % ncols == 0:
-                ax.set_ylabel('Attribute to [CLS] attention')
+                ax.set_ylabel('[CLS] to attr attention', fontsize=16)
+
+        if not legend:
+            handles, labels = ax.get_legend_handles_labels()
+            if small_plot:
+                fig.legend(handles, labels, bbox_to_anchor=(.6, 0.05), ncol=4, fontsize=16)
+            else:
+                fig.legend(handles, labels, bbox_to_anchor=(.63, 0.01), ncol=4, fontsize=16)
 
         plt.tight_layout()
-        plt.subplots_adjust(wspace=0.02, hspace=0.8)
+        if small_plot:
+            plt.subplots_adjust(wspace=0.02, hspace=0.2)
+        else:
+            plt.subplots_adjust(wspace=0.02, hspace=0.75)
 
         if save_path:
             plt.savefig(save_path, bbox_inches='tight')
@@ -576,7 +599,7 @@ class EntityToEntityAttentionAnalyzer(object):
                 assert isinstance(e2e_attn_by_cat, pd.DataFrame), err_msg
 
     @staticmethod
-    def plot_entity_to_entity_attn(e2e_attn, ax=None, title=None):
+    def plot_entity_to_entity_attn(e2e_attn, ax=None, title=None, legend=True):
         EntityToEntityAttentionAnalyzer.check_entity_to_entity_attn_results(e2e_attn)
 
         if ax is None:
@@ -600,7 +623,7 @@ class EntityToEntityAttentionAnalyzer(object):
             if cat == 'all_pred_neg':
                 plot_cat = 'non-match'
 
-            ax.errorbar(**plot_data, alpha=.75, fmt=':', capsize=3, capthick=1, label=plot_cat)
+            ax.errorbar(**plot_data, alpha=.75, fmt='o-', capsize=3, capthick=1, label=plot_cat)
             # plot_data_area = {
             #     'x': plot_data['x'],
             #     'y1': percs_25,
@@ -608,24 +631,33 @@ class EntityToEntityAttentionAnalyzer(object):
             # }
             # ax.fill_between(**plot_data_area, alpha=.25)
             ax.set_xticks(range(len(e2e_attn_by_cat.columns)))
-            ax.set_xticklabels(e2e_attn_by_cat.columns)
-            ax.legend()
+            ax.set_xticklabels(e2e_attn_by_cat.columns, fontsize=16)
+            ax.yaxis.set_tick_params(labelsize=18)
+            if legend:
+                ax.legend()
 
         if title is not None:
-            ax.set_title(title)
-        ax.set_xlabel('Layers')
+            ax.set_title(title, fontsize=18)
+        # ax.set_xlabel('Layers')
 
     @staticmethod
-    def plot_multi_entity_to_entity_attn(e2e_results, save_path: str = None):
+    def plot_multi_entity_to_entity_attn(e2e_results: dict, small_plot: bool = False, save_path: str = None):
 
         assert isinstance(e2e_results, dict)
 
         ncols = 4
         nrows = 3
+        figsize = (20, 12)
+
+        if small_plot:
+            ncols = 4
+            nrows = 1
+            figsize = (20, 3)
+
         if len(e2e_results) == 1:
             ncols = 1
             nrows = 1
-        fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(20, 12), sharey=True)
+        fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=figsize, sharey=True)
         if len(e2e_results) > 1:
             axes = axes.flat
         # loop over the use cases
@@ -634,9 +666,18 @@ class EntityToEntityAttentionAnalyzer(object):
                 ax = axes
             else:
                 ax = axes[idx]
-            EntityToEntityAttentionAnalyzer.plot_entity_to_entity_attn(e2e_results[use_case], ax=ax, title=use_case)
+            EntityToEntityAttentionAnalyzer.plot_entity_to_entity_attn(e2e_results[use_case], ax=ax, title=use_case,
+                                                                       legend=False)
             if idx % ncols == 0:
-                ax.set_ylabel('Entity to entity attention')
+                ax.set_ylabel('Entity to entity attention', fontsize=16)
+
+        handles, labels = ax.get_legend_handles_labels()
+        label_map = {'all_pos': 'match', 'all_neg': 'non-match'}
+        labels = [label_map[l] if l in label_map else l for l in labels]
+        if small_plot:
+            fig.legend(handles, labels, bbox_to_anchor=(.62, 0.05), ncol=2, fontsize=16)
+        else:
+            fig.legend(handles, labels, bbox_to_anchor=(.7, 0.02), ncol=4, fontsize=16)
 
         plt.tight_layout()
         plt.subplots_adjust(wspace=0.02, hspace=0.3)
@@ -648,7 +689,8 @@ class EntityToEntityAttentionAnalyzer(object):
 
 
 class TopKAttentionAnalyzer(object):
-    def __init__(self, attns: list, topk: int = None, topk_method: str = None, tokenization: str = 'sent_pair'):
+    def __init__(self, attns: list, topk: int = None, topk_method: str = None, tokenization: str = 'sent_pair',
+                 pair_mode: bool = False):
         WordAttentionExtractor.check_batch_attn_features(attns)
         if topk is not None:
             assert isinstance(topk, int), "Wrong data type for parameter 'topk'."
@@ -661,6 +703,7 @@ class TopKAttentionAnalyzer(object):
             assert topk_method is None
         assert isinstance(tokenization, str)
         assert tokenization in ['sent_pair', 'attr_pair']
+        assert isinstance(pair_mode, bool)
 
         attn_data = {}
         for attn in attns:
@@ -703,14 +746,18 @@ class TopKAttentionAnalyzer(object):
             for layer in range(attn_values.shape[0]):
                 layer_attn_values = attn_values[layer]
 
-                # aggregate the attention values in order to obtain a single attention score for each word
-                # for each word calculate the average attention per row and per column and obtain the maximum value
-                agg_layer_attns = np.maximum(layer_attn_values.mean(axis=0), layer_attn_values.mean(axis=1))
+                if not pair_mode:
+                    # aggregate the attention values in order to obtain a single attention score for each word
+                    # for each word calculate the average attention per row and per column and obtain the maximum value
+                    agg_layer_attns = np.maximum(layer_attn_values.mean(axis=0), layer_attn_values.mean(axis=1))
+                    attn_scores = agg_layer_attns
+                else:
+                    attn_scores = layer_attn_values
 
                 item = {
                     'label': label,
                     'pred': pred,
-                    'attns': {'text_units': attn_text_units, 'values': agg_layer_attns, 'left': attn[0],
+                    'attns': {'text_units': attn_text_units, 'values': attn_scores, 'left': attn[0],
                               'right': attn[1], 'sep_idx': len(left_idxs)},
                 }
 
@@ -723,6 +770,7 @@ class TopKAttentionAnalyzer(object):
         self.topk = topk
         self.topk_method = topk_method
         self.tokenization = tokenization
+        self.pair_mode = pair_mode
         self.analysis_types = ['pos', 'str_type', 'sim']
         self.pos_model = spacy.load('en_core_web_sm')
         self.pos_model.tokenizer = Tokenizer(self.pos_model.vocab, token_match=re.compile(r'\S+').match)
@@ -775,7 +823,6 @@ class TopKAttentionAnalyzer(object):
         assert isinstance(topk, int), "Wrong data type for parameter 'topk'."
 
         def get_topk_text_units_in_entity_by_attr(attn, tokens, entity, topk, offset=0):
-            # check that the input record matches with the grad data
             first_attr = str(entity.iloc[0]).split()
             attn_first_attr = tokens[:len(first_attr)]
             if len(attn_first_attr) < len(first_attr):
@@ -804,26 +851,79 @@ class TopKAttentionAnalyzer(object):
 
             return topk_text_units_by_attr
 
-        sep_idx = attn_record['sep_idx']
-        left_entity = attn_record['left']
-        left_tokens = list(np.array(attn_record['text_units'])[:sep_idx])
-        left_attns = np.array(attn_record['values'])[:sep_idx]
-        left_topk = get_topk_text_units_in_entity_by_attr(left_attns, left_tokens, left_entity, topk, offset=0)
+        def get_paired_topk_text_units_in_entity_by_attr(attn, left_tokens, right_tokens, left_entity, right_entity,
+                                                         topk, sep_idx):
 
-        right_entity = attn_record['right']
-        right_tokens = list(np.array(attn_record['text_units'])[sep_idx:])
-        right_attns = np.array(attn_record['values'])[sep_idx:]
-        right_topk = get_topk_text_units_in_entity_by_attr(right_attns, right_tokens, right_entity, topk,
-                                                           offset=sep_idx)
+            first_left_attr = str(left_entity.iloc[0]).split()
+            attn_first_left_attr = left_tokens[:len(first_left_attr)]
+            if len(attn_first_left_attr) < len(first_left_attr):
+                first_left_attr = first_left_attr[:len(attn_first_left_attr)]
+            assert attn_first_left_attr == first_left_attr
+
+            first_right_attr = str(right_entity.iloc[0]).split()
+            attn_first_right_attr = right_tokens[:len(first_right_attr)]
+            if len(attn_first_right_attr) < len(first_right_attr):
+                first_right_attr = first_right_attr[:len(attn_first_right_attr)]
+            assert attn_first_right_attr == first_right_attr
+
+            topk_text_units_by_attr = {}
+            left_cum_idx = 0
+            right_cum_idx = sep_idx
+            for attr in left_entity.index:
+                left_val = str(left_entity[attr]).split()
+                right_val = str(right_entity[attr]).split()
+
+                left_idxs = (left_cum_idx, left_cum_idx + len(left_val))
+                right_idxs = (right_cum_idx, right_cum_idx + len(right_val))
+
+                # check consistency
+                attr_left_tokens = left_tokens[left_idxs[0]:left_idxs[1]]
+                attr_right_tokens = right_tokens[right_idxs[0] - sep_idx:right_idxs[1] - sep_idx]
+                if len(left_val) == len(attr_left_tokens):
+                    assert left_val == attr_left_tokens
+                if len(right_val) == len(attr_right_tokens):
+                    assert right_val == attr_right_tokens
+
+                lr_attr_attn = attn[left_idxs[0]: left_idxs[1]][:, right_idxs[0]: right_idxs[1]]
+                rl_attr_attn = attn[right_idxs[0]: right_idxs[1]][:, left_idxs[0]: left_idxs[1]].T
+                attr_attn = (lr_attr_attn + rl_attr_attn) / 2
+                top_pair_idxs = np.dstack(np.unravel_index(np.argsort(attr_attn.ravel()), (attr_attn.shape[0], attr_attn.shape[1])))[0][-topk:]
+                top_pair_text_units = [(attr_left_tokens[p[0]], attr_right_tokens[p[1]]) for p in top_pair_idxs]
+                top_pair_attn = [attr_attn[p[0], p[1]] for p in top_pair_idxs]
+                top_pair_original_idxs = [(left_cum_idx + p[0], right_cum_idx + p[1]) for p in top_pair_idxs]
+
+                topk_text_units_by_attr[attr] = {'text_units': top_pair_text_units, 'values': top_pair_attn,
+                                                 'idxs': top_pair_original_idxs,
+                                                 'original_text': (attr_left_tokens, attr_right_tokens)}
+                left_cum_idx += len(left_val)
+                right_cum_idx += len(right_val)
+
+            return topk_text_units_by_attr
 
         all_topk = {}
-        if pair_mode:
-            for attr in left_topk:
-                if attr in right_topk:
-                    all_topk[attr] = (left_topk[attr], right_topk[attr])
-        else:
+        sep_idx = attn_record['sep_idx']
+        left_entity = attn_record['left']
+        right_entity = attn_record['right']
+        attns = attn_record['values']
+        text_units = attn_record['text_units']
+        left_tokens = list(np.array(text_units)[:sep_idx])
+        right_tokens = list(np.array(text_units)[sep_idx:])
+
+        if not pair_mode:
+
+            left_attns = np.array(attns)[:sep_idx]
+            left_topk = get_topk_text_units_in_entity_by_attr(left_attns, left_tokens, left_entity, topk, offset=0)
+
+            right_attns = np.array(attns)[sep_idx:]
+            right_topk = get_topk_text_units_in_entity_by_attr(right_attns, right_tokens, right_entity, topk,
+                                                               offset=sep_idx)
+
             all_topk.update({f'l_{attr}': left_topk[attr] for attr in left_topk})
             all_topk.update({f'r_{attr}': right_topk[attr] for attr in right_topk})
+
+        else:
+            all_topk = get_paired_topk_text_units_in_entity_by_attr(attns, left_tokens, right_tokens, left_entity,
+                                                                    right_entity, topk, sep_idx)
 
         return all_topk
 
@@ -868,10 +968,6 @@ class TopKAttentionAnalyzer(object):
             assert target_layer in self.attn_data
 
         # get top-k words at attribute or sentence level
-        pair_mode = False
-        if analysis_type == 'sim':
-            pair_mode = True
-
         out_data = {}
         for layer in self.attn_data:
             print(f"Layer#{layer}")
@@ -884,7 +980,7 @@ class TopKAttentionAnalyzer(object):
             top_words_by_cat = TopKAttentionAnalyzer.get_topk(data=layer_attn_data, target_key='attns',
                                                               tok=self.tokenization, by_attr=by_attr,
                                                               target_categories=target_categories, topk=self.topk,
-                                                              topk_method=self.topk_method, pair_mode=pair_mode)
+                                                              topk_method=self.topk_method, pair_mode=self.pair_mode)
 
             top_results = {}
             # loop over the data categories (e.g., match, non-match, fp, etc.)
@@ -940,22 +1036,22 @@ class TopKAttentionAnalyzer(object):
                                             top_stats[key][pos_tag] += 1
 
                         elif analysis_type == 'sim':
-                            left_top_attn = top_words_by_key[0]
-                            right_top_attn = top_words_by_key[1]
-                            left_words = left_top_attn['original_text']
-                            right_words = right_top_attn['original_text']
-                            left_words_attn = left_top_attn['text_units']
-                            right_words_attn = right_top_attn['text_units']
-                            top_sim_words = get_most_similar_words_from_sent_pair(left_words, right_words, self.topk)
-                            left_top_sim_words = [t[0] for t in top_sim_words]
-                            right_top_sim_words = [t[1] for t in top_sim_words]
 
-                            if len(top_sim_words) == 0 or len(left_words_attn) < self.topk or len(right_words_attn) < self.topk:
+                            left_words = top_words_by_key['original_text'][0]
+                            right_words = top_words_by_key['original_text'][1]
+                            top_attn_words = top_words_by_key['text_units']
+                            # left_words_attn = [w[0] for w in top_words_by_key['text_units']]
+                            # right_words_attn = [w[1] for w in top_words_by_key['text_units']]
+                            top_sim_words = get_most_similar_words_from_sent_pair(left_words, right_words, self.topk)
+                            #left_top_sim_words = [t[0] for t in top_sim_words]
+                            #right_top_sim_words = [t[1] for t in top_sim_words]
+
+                            if len(top_sim_words) == 0 or len(top_attn_words) < self.topk:
                                 continue
 
                             acc = 0
-                            for j in range(len(left_words_attn)):
-                                if left_words_attn[j] in left_top_sim_words and right_words_attn[j] in right_top_sim_words:
+                            for top_attn_word in top_attn_words:
+                                if top_attn_word in [(t[0], t[1]) for t in top_sim_words]:
                                     acc += 1
                             acc /= self.topk
 
@@ -980,7 +1076,8 @@ class TopKAttentionAnalyzer(object):
                 else:
                     for key in top_stats:
                         if len(top_stats[key]) >= len(top_words_in_cat) - int(0.10 * len(top_words_in_cat)):
-                            print(cat, key, len(top_stats[key]), len(top_words_in_cat) - int(0.10 * len(top_words_in_cat)))
+                            print(cat, key, len(top_stats[key]),
+                                  len(top_words_in_cat) - int(0.10 * len(top_words_in_cat)))
                             top_norm_stats[key] = np.sum(top_stats[key]) / len(top_stats[key])
                         else:
                             print("REMOVED ", cat, key, len(top_stats[key]))
@@ -1021,7 +1118,7 @@ class TopKAttentionAnalyzer(object):
 
     @staticmethod
     def plot_top_attn_stats(plot_data: dict, plot_params: dict, ylabel: str, out_plot_name: str = None,
-                            legend: bool = True, y_lim: tuple = None, legend_position=None):
+                            legend: bool = True, y_lim: tuple = None, legend_position=None, small_plot=False):
         assert isinstance(plot_data, dict)
         assert isinstance(plot_params, dict)
         assert isinstance(ylabel, str)
@@ -1030,10 +1127,17 @@ class TopKAttentionAnalyzer(object):
 
         ncols = 4
         nrows = 3
+        figsize = (20, 10)
+
+        if small_plot:
+            ncols = 4
+            nrows = 1
+            figsize = (15, 3)
+
         if len(plot_data) == 1:
             ncols = 1
             nrows = 1
-        fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(20, 10), sharey=True)
+        fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=figsize, sharey=True)
         if len(plot_data) > 1:
             axes = axes.flat
         for idx, use_case in enumerate(plot_data):
@@ -1053,30 +1157,41 @@ class TopKAttentionAnalyzer(object):
             if idx % ncols == 0:
                 if ylabel is not None:
                     ax.set_ylabel(ylabel, fontsize=20)
-            ax.set_xlabel("layers", fontsize=20)
-            ax.xaxis.set_tick_params(labelsize=18)
+            if not small_plot:
+                ax.set_xlabel("Layers", fontsize=20)
+            ax.xaxis.set_tick_params(labelsize=16)
             ax.yaxis.set_tick_params(labelsize=20)
             if len(use_case_stats) > 1:
                 ax.set_xticks(list(use_case_stats.index)[::2])
+            # ax.set_xticks(range(1, len(use_case_stats) + 1))
+            # ax.set_xticklabels(range(1, len(use_case_stats) + 1))
             if y_lim is not None:
                 assert len(y_lim) == 2
-                ax.set_ylim(y_lim[0], y_lim[1])
+                # ax.set_ylim(y_lim[0], y_lim[1])
+                ax.set_yticks(range(y_lim[0], y_lim[1] + 25, 25))
+                ax.set_yticklabels(range(y_lim[0], y_lim[1] + 25, 25))
 
         if len(plot_data) > 1:
             if legend:
                 handles, labels = ax.get_legend_handles_labels()
                 if legend_position is None:
-                    legend_position = (0.74, 0.05)
-                fig.legend(handles, labels, bbox_to_anchor=legend_position, ncol=4, fontsize=20)
-        plt.subplots_adjust(wspace=0.1, hspace=0.6)
+                    if small_plot:
+                        legend_position = (.76, 0)
+                    else:
+                        legend_position = (0.70, 0.05)
+                fig.legend(handles, labels, bbox_to_anchor=legend_position, ncol=4, fontsize=16)
+        if small_plot:
+            plt.subplots_adjust(wspace=0.05, hspace=0.2)
+        else:
+            plt.subplots_adjust(wspace=0.1, hspace=0.6)
         if out_plot_name:
             plt.savefig(out_plot_name, bbox_inches='tight')
-        #plt.tight_layout()
+        # plt.tight_layout()
         plt.show()
 
     @staticmethod
-    def plot_agg_top_attn_stats(plot_data: dict, agg_dim: str, ylabel: str = None, out_plot_name: str = None,
-                                ylim: tuple = None):
+    def plot_agg_top_attn_stats_bar(plot_data: dict, agg_dim: str, ylabel: str = None, out_plot_name: str = None,
+                                    ylim: tuple = None):
 
         assert isinstance(plot_data, dict)
         assert isinstance(agg_dim, str)
@@ -1089,7 +1204,10 @@ class TopKAttentionAnalyzer(object):
             assert isinstance(ylim, tuple)
             assert len(ylim) == 2
 
-        if agg_dim == 'layer':           # average the score across the layers
+        method_map = {'finetune_sentpair': 'ft_sent', 'finetune_attrpair': 'ft_attr',
+                      'pretrain_sentpair': 'pt_sent', 'pretrain_attrpair': 'pt_attr'}
+
+        if agg_dim == 'layer':  # average the score across the layers
             first_item = list(plot_data.values())[0]
             columns = first_item.columns
             avg_plot_data = np.zeros((len(plot_data), len(columns)))
@@ -1100,7 +1218,7 @@ class TopKAttentionAnalyzer(object):
             avg_plot_data_table = pd.DataFrame(avg_plot_data, index=plot_data.keys(), columns=columns)
             std_plot_data_table = pd.DataFrame(std_plot_data, index=plot_data.keys(), columns=columns)
 
-        else:                   # average the scores across the use cases
+        else:  # average the scores across the use cases
             assert len(plot_data) > 1
 
             first_item = list(plot_data.values())[0]
@@ -1120,6 +1238,8 @@ class TopKAttentionAnalyzer(object):
             avg_plot_data_table = pd.DataFrame(avg_plot_data, index=tab_index, columns=columns)
             std_plot_data_table = pd.DataFrame(std_plot_data, index=tab_index, columns=columns)
 
+        avg_plot_data_table = avg_plot_data_table.rename(columns=method_map)
+        std_plot_data_table = std_plot_data_table.rename(columns=method_map)
         avg_plot_data_table.plot(kind='bar', figsize=(12, 3), yerr=std_plot_data_table)
         ax = plt.gca()
         if ylim is not None:
@@ -1131,7 +1251,7 @@ class TopKAttentionAnalyzer(object):
         if agg_dim == 'use_case':
             plt.xlabel('Layers')
         else:
-            plt.xlabel('Use cases')
+            plt.xlabel('Datasets')
         plt.tight_layout()
 
         if out_plot_name is not None:
@@ -1139,3 +1259,92 @@ class TopKAttentionAnalyzer(object):
 
         plt.show()
 
+    @staticmethod
+    def plot_agg_top_attn_stats(plot_data: dict, agg_dim: str, ylabel: str = None, out_plot_name: str = None,
+                                ylim: tuple = None):
+
+        assert isinstance(plot_data, dict)
+        assert isinstance(agg_dim, str)
+        assert agg_dim in ['layer', 'use_case']
+        if ylabel is not None:
+            assert isinstance(ylabel, str)
+        if out_plot_name is not None:
+            assert isinstance(out_plot_name, str)
+        if ylim is not None:
+            assert isinstance(ylim, tuple)
+            assert len(ylim) == 2
+
+        method_map = {'finetune_sentpair': 'ft_sent', 'finetune_attrpair': 'ft_attr',
+                      'pretrain_sentpair': 'pt_sent', 'pretrain_attrpair': 'pt_attr'}
+        # method_map = {'pretrain_sentpair': 'pre-trained', 'finetune_sentpair': 'fine-tuned'}
+
+        plt.figure(figsize=(6, 2.5))
+        # plt.style.use('seaborn-whitegrid')
+
+        if agg_dim == 'layer':
+            first_item = list(plot_data.values())[0]
+            methods = first_item.columns
+            for method in methods:
+                method_plot_data = [plot_data[uc][[method]] for uc in plot_data]
+                method_plot_data_tab = pd.concat(method_plot_data, axis=1)
+                mathod_plot_data_stats = method_plot_data_tab.describe()
+                medians = mathod_plot_data_stats.loc['50%', :].values
+                percs_25 = mathod_plot_data_stats.loc['25%', :].values
+                percs_75 = mathod_plot_data_stats.loc['75%', :].values
+
+                plot_stats = {
+                    'x': range(len(plot_data.keys())),
+                    'y': medians,
+                    'yerr': [medians - percs_25, percs_75 - medians],
+                }
+
+                # plt.errorbar(**plot_stats, alpha=.75, fmt=':', capsize=3, capthick=1, label=method_map[method])
+                plt.errorbar(**plot_stats, alpha=.75, fmt='.', capsize=5, label=method_map[method])
+
+        else:
+            first_item = list(plot_data.values())[0]
+            methods = first_item.columns
+            layers = first_item.index
+            plot_data_by_layers = {l: np.zeros((len(plot_data), len(methods))) for l in layers}
+            for uc_idx, uc in enumerate(plot_data):
+                uc_plot_data = plot_data[uc][methods].values
+                for l, uc_plot_data_layer in enumerate(uc_plot_data, 1):
+                    plot_data_by_layers[l][uc_idx] = uc_plot_data_layer
+
+            for method_idx, method in enumerate(methods):
+                method_plot_data = [plot_data_by_layers[l][:, method_idx].reshape((-1, 1)) for l in plot_data_by_layers]
+                method_plot_data_tab = pd.DataFrame(np.concatenate(method_plot_data, axis=1))
+                mathod_plot_data_stats = method_plot_data_tab.describe()
+                medians = mathod_plot_data_stats.loc['50%', :].values
+                percs_25 = mathod_plot_data_stats.loc['25%', :].values
+                percs_75 = mathod_plot_data_stats.loc['75%', :].values
+
+                plot_stats = {
+                    'x': range(len(plot_data_by_layers.keys())),
+                    'y': medians,
+                    'yerr': [medians - percs_25, percs_75 - medians],
+                }
+
+                # plt.errorbar(**plot_stats, alpha=.75, fmt=':', capsize=3, capthick=1, label=method_map[method])
+                plt.errorbar(**plot_stats, alpha=.75, fmt='.-', capsize=5, label=method_map[method])
+
+        ax = plt.gca()
+        if ylim is not None:
+            ax.set_ylim(ylim[0], ylim[1])
+        plt.xticks(rotation=0)
+        # plt.legend(ncol=4, loc='upper center')
+        plt.legend(ncol=4, loc='best')
+        if ylabel is not None:
+            plt.ylabel(ylabel)
+        if agg_dim == 'use_case':
+            # plt.xlabel('Layers')
+            plt.xticks(range(len(plot_data_by_layers.keys())), plot_data_by_layers.keys())
+        else:
+            # plt.xlabel('Datasets')
+            plt.xticks(range(len(plot_data.keys())), plot_data.keys())
+        plt.tight_layout()
+
+        if out_plot_name is not None:
+            plt.savefig(out_plot_name, bbox_inches='tight')
+
+        plt.show()

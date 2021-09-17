@@ -161,12 +161,12 @@ def get_most_similar_words_from_sent_pair(sent1: list, sent2: list, topk: int):
     assert len(sent2) > 0, "Empty sentence2 tokens."
     assert isinstance(topk, int), "Wrong data type for parameter 'topk'."
 
-    # filter out non-alphabetic words and stop words
-    stop_words = set(stopwords.words('english'))
-    # sent1 = [w for w in sent1 if w.isalpha() and w not in stop_words]
-    # sent2 = [w for w in sent2 if w.isalpha() and w not in stop_words]
-    sent1 = [w for w in sent1 if w not in stop_words and w not in string.punctuation and len(w) > 2]
-    sent2 = [w for w in sent2 if w not in stop_words and w not in string.punctuation and len(w) > 2]
+    # # filter out non-alphabetic words and stop words
+    # stop_words = set(stopwords.words('english'))
+    # # sent1 = [w for w in sent1 if w.isalpha() and w not in stop_words]
+    # # sent2 = [w for w in sent2 if w.isalpha() and w not in stop_words]
+    # sent1 = [w for w in sent1 if w not in stop_words and w not in string.punctuation and len(w) > 2]
+    # sent2 = [w for w in sent2 if w not in stop_words and w not in string.punctuation and len(w) > 2]
 
     if len(sent1) == 0 or len(sent2) == 0:
         return []
