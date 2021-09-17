@@ -14,9 +14,10 @@ from utils.result_collector import TestResultCollector
 from utils.plot import plot_results, plot_benchmark_results, plot_agg_results, plot_comparison, plot_images_grid
 from utils.test_utils import ConfCreator
 from utils.general import get_testers
+from paper.experiment_confs import *
 
 
-PROJECT_DIR = Path(__file__).parent.parent.parent
+PROJECT_DIR = Path(__file__).parent.parent
 RESULTS_DIR = os.path.join(PROJECT_DIR, 'results', 'attention')
 
 
@@ -979,10 +980,9 @@ def plot_quadrant_vertical_freq(stats, save_path=None):
     plot_vertical_freq_by_quadrants(new_plot_data, save_path=save_path)
 
 
-def plot_sub_experiment_results(results: dict, sub_experiment: str, small_plot: bool = False, save_path: str = None):
+def plot_sub_experiment_results(results: dict, sub_experiment: str, save_path: str = None):
     assert isinstance(results, dict)
     assert isinstance(sub_experiment, str)
-    assert isinstance(small_plot, bool)
     if save_path is not None:
         assert isinstance(save_path, str)
 
@@ -991,8 +991,8 @@ def plot_sub_experiment_results(results: dict, sub_experiment: str, small_plot: 
                                 save_path=save_path)
 
     elif sub_experiment == 'match_freq_by_layer':
-        plot_pattern_freq_by_layer(results, target_head='all', target_pattern='match', small_plot=small_plot,
-                                   save_path=save_path)
+        plot_pattern_freq_by_layer(results, target_head='all', target_pattern='match', small_plot=small_plot
+                                   , save_path=save_path)
 
     elif sub_experiment == 'entropy_by_layer':
         plot_entropy_by_layer(results, target_head='all', save_path=save_path)
@@ -1009,60 +1009,27 @@ def plot_sub_experiment_results(results: dict, sub_experiment: str, small_plot: 
 
 if __name__ == '__main__':
 
-    use_cases = ["Structured_Fodors-Zagats", "Structured_DBLP-GoogleScholar", "Structured_DBLP-ACM",
-                 "Structured_Amazon-Google", "Structured_Walmart-Amazon", "Structured_Beer",
-                 "Structured_iTunes-Amazon", "Textual_Abt-Buy", "Dirty_iTunes-Amazon", "Dirty_DBLP-ACM",
-                 "Dirty_DBLP-GoogleScholar", "Dirty_Walmart-Amazon"]
-    # selection for the experiment 'match_freq_by_layer'
-    # use_cases = ["Structured_Fodors-Zagats", "Structured_DBLP-GoogleScholar", "Structured_DBLP-ACM",
-    #              "Structured_Amazon-Google"]
-    small_plot = False
+    config_params = maa_pattern_comparison_by_layer_small
 
-    conf = {
-        'use_case': "Structured_Fodors-Zagats",  # when analysis_target = 'benchmark' this field will be set with all use cases
-        'data_type': 'train',
-        'permute': False,
-        'model_name': 'bert-base-uncased',
-        'tok': 'sent_pair',
-        'size': None,
-        'fine_tune_method': None,       # None, 'simple'
-        'extractor': {
-            'attn_extractor': 'attr_extractor',  # 'attr_extractor', 'word_extractor'
-            'attn_extr_params': {'special_tokens': True, 'agg_metric': 'mean'},
-        },
-        'tester': {
-            'tester': 'attr_pattern_tester',    # 'attr_tester', 'attr_pattern_tester'
-            'tester_params': {'ignore_special': True}
-        },
-    }
+    use_cases = config_params['use_cases']
+    conf = config_params['conf']
+    experiment = config_params['experiment']
+    analysis_target = config_params['analysis_target']
+    analysis_type = config_params['analysis_type']
+    plot_params = config_params['plot_params']
+    agg_fns = config_params['agg_fns']
+    target_agg_result_ids = config_params['target_agg_result_ids']
+    categories = config_params['categories']
+    comparison_param = config_params['comparison_param']
+    sub_experiment = config_params["sub_experiment"]
+    comparison = config_params["comparison"]
+    small_plot = config_params["small_plot"]
+
     conf_creator = ConfCreator()
     conf_creator.validate_conf(conf)
     use_case_map = ConfCreator().use_case_map
 
-    experiment = 'pattern_freq'     # 'pattern_freq', 'pattern'
-
     if experiment == 'pattern':
-        analysis_target = 'benchmark'    # 'use_case', 'benchmark'
-        analysis_type = 'comparison'    # 'simple', 'comparison', 'multi'
-
-        # plot_params = ['match_attr_attn_loc', 'match_attr_attn_over_mean',
-        #                'avg_attr_attn', 'attr_attn_3_last', 'attr_attn_last_1',
-        #                'attr_attn_last_2', 'attr_attn_last_3',
-        #                'avg_attr_attn_3_last', 'avg_attr_attn_last_1',
-        #                'avg_attr_attn_last_2', 'avg_attr_attn_last_3']
-        plot_params = ['attr_attn_3_last', 'match_attr_attn_loc', 'match_attr_attn_over_mean',
-                       'avg_attr_attn', 'attr_attn_last_1',
-                       'attr_attn_last_2', 'attr_attn_last_3']
-        plot_params = ['match_attr_attn_over_mean']
-        # plot_params = ['match_attr_attn_loc']
-
-        # aggregation
-        # agg_fns = None
-        # target_agg_result_ids = None
-        agg_fns = ['row_mean', 'row_std']
-        target_agg_result_ids = ['match_attr_attn_loc']
-
-        categories = ['all']
 
         extractor_name = conf['extractor']['attn_extractor']
         tester_name = conf['tester']['tester']
@@ -1074,7 +1041,7 @@ if __name__ == '__main__':
                 use_case_analysis(conf, plot_params, categories, agg_fns, target_agg_result_ids)
 
             elif analysis_type == 'comparison':
-                comparison_param = 'fine_tune_method'  # 'tok', 'fine_tune_method'
+                # comparison_param = 'fine_tune_method'  # 'tok', 'fine_tune_method'
 
                 if comparison_param == 'fine_tune_method':
                     compared_methods = ['Pre-training', 'Fine-tuning']
@@ -1127,7 +1094,7 @@ if __name__ == '__main__':
 
             elif analysis_type == 'comparison':
 
-                comparison_param = 'fine_tune_method'   # 'tok', 'fine_tune_method'
+                # comparison_param = 'tok'   # 'tok', 'fine_tune_method'
 
                 template_file_name = '{}_{}_{}_{}_{}_{}_{}_{}_{}'.format(conf['data_type'], extractor_name, tester_name,
                                                                          conf['permute'],  conf['size'], agg_metric,
@@ -1155,9 +1122,9 @@ if __name__ == '__main__':
             raise NotImplementedError()
 
     elif experiment == 'pattern_freq':
-        analysis_type = 'comparison'    # 'simple', 'comparison'
+        # analysis_type = 'comparison'    # 'simple', 'comparison'
         # experiments: 'all_freq', 'match_freq_by_layer', 'entropy_by_layer', 'vertical_loc', 'quadrant_vertical_freq'
-        sub_experiment = 'all_freq'
+        # sub_experiment = 'all_freq'
 
         conf['use_case'] = use_cases
         categories = ['all']
@@ -1188,7 +1155,7 @@ if __name__ == '__main__':
             plot_sub_experiment_results(res, sub_experiment, save_path)
 
         elif analysis_type == 'comparison':
-            comparison = 'tune_tok'  # 'tune', 'tok', 'tune_tok'
+            # comparison = 'tune_tok'  # 'tune', 'tok', 'tune_tok'
 
             if comparison == 'tune':
                 new_conf = conf.copy()
@@ -1281,7 +1248,7 @@ if __name__ == '__main__':
 
                 save_path = os.path.join(RESULTS_DIR, f'PLOT_PATTERN_{template_file_name}.pdf')
 
-                plot_sub_experiment_results(plot_res, sub_experiment, small_plot, save_path)
+                plot_sub_experiment_results(plot_res, sub_experiment, save_path)
 
         else:
             raise NotImplementedError()
