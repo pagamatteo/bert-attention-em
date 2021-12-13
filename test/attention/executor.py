@@ -170,7 +170,7 @@ if __name__ == '__main__':
         'data_type': ['train'],  #['train', 'test'],
         'permute': [False],
         'model_name': ['bert-base-uncased'],
-        'tok': ['sent_pair'],  # 'sent_pair', 'attr', 'attr_pair'
+        'tok': ['attr_pair'],  # 'sent_pair', 'attr', 'attr_pair'
         'size': [None],
         'target_class': ['both'],  # 'both', 0, 1
         'fine_tune_method': [None],  # None, 'simple', 'advanced'
@@ -182,7 +182,7 @@ if __name__ == '__main__':
         ],
         'tester': [
             {
-                'tester': 'attr_tester',    # 'attr_tester', 'attr_pattern_tester'
+                'tester': 'attr_pattern_tester',    # 'attr_tester', 'attr_pattern_tester'
                 'tester_params': {'ignore_special': True}
             }
         ],

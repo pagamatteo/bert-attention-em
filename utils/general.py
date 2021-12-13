@@ -44,6 +44,9 @@ def get_dataset(conf: dict):
     max_len = conf['max_len']
     verbose = conf['verbose']
     permute = conf['permute']
+    return_offset = False
+    if 'return_offset' in conf:
+        return_offset = conf['return_offset']
 
     use_case_data_dir = get_use_case(use_case)
 
@@ -56,7 +59,8 @@ def get_dataset(conf: dict):
 
     data = pd.read_csv(dataset_path)
     dataset = EMDataset(data, model_name, tokenization=tok, label_col=label_col, left_prefix=left_prefix,
-                        right_prefix=right_prefix, max_len=max_len, verbose=verbose, permute=permute)
+                        right_prefix=right_prefix, max_len=max_len, verbose=verbose, permute=permute,
+                        return_offset=return_offset)
 
     return dataset
 

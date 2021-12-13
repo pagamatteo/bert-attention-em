@@ -201,6 +201,9 @@ def execute_experiment_topk_attn_words(use_cases, conf, sampler_conf, fine_tune,
             analyzer = TopKAttentionAnalyzer(uc_attn, topk=topk, tokenization=conf['tok'], pair_mode=True)
             analyzed_data = analyzer.analyze('sim', by_attr=True, target_categories=target_categories,
                                              target_layer=target_layer)
+            # analyzer = TopKAttentionAnalyzer(uc_attn, topk_method='quantile', tokenization=conf['tok'], pair_mode=True)
+            # analyzed_data = analyzer.analyze('sim', by_attr=False, target_categories=target_categories,
+            #                                  target_layer=target_layer)
             for layer in analyzed_data:
                 l_analyzed_data = analyzed_data[layer]
                 assert isinstance(l_analyzed_data, dict)
@@ -235,17 +238,19 @@ if __name__ == '__main__':
                  "Dirty_DBLP-GoogleScholar", "Dirty_Walmart-Amazon"]
     small_plot = False
 
+    # use_cases = ["Structured_Fodors-Zagats", "Structured_DBLP-GoogleScholar"]
+
     # selection for the experiment topk_attn_word (POS tag distribution)
     # use_cases = ["Structured_Fodors-Zagats", "Structured_Walmart-Amazon", "Structured_iTunes-Amazon", "Textual_Abt-Buy"]
     # small_plot = True
 
     # selection for the experiment attr_to_cls
-    # use_cases = ["Structured_Fodors-Zagats", "Structured_DBLP-GoogleScholar", "Structured_DBLP-ACM", "Dirty_DBLP-ACM"]
-    # small_plot = True
+    use_cases = ["Structured_Fodors-Zagats", "Structured_DBLP-GoogleScholar", "Structured_DBLP-ACM", "Dirty_DBLP-ACM"]
+    small_plot = True
 
     # selection for the experiment entity-to-entity
-    use_cases = ["Structured_Amazon-Google", "Structured_Beer", "Textual_Abt-Buy", "Dirty_Walmart-Amazon"]
-    small_plot = True
+    # use_cases = ["Structured_Amazon-Google", "Structured_Beer", "Textual_Abt-Buy", "Dirty_Walmart-Amazon"]
+    # small_plot = True
 
     # [BEGIN] INPUT PARAMS ---------------------------------------------------------------------------------------------
     conf = {
@@ -269,15 +274,15 @@ if __name__ == '__main__':
     fine_tune = 'simple'  # None, 'simple', 'advanced'
 
     attn_params = {
-        'attn_extractor': 'token_extractor',  # 'attr_extractor', 'word_extractor', 'token_extractor'
-        'attn_extr_params': {'special_tokens': True, 'agg_metric': 'mean'},
+        'attn_extractor': 'attr_extractor',  # 'attr_extractor', 'word_extractor', 'token_extractor'
+        'attn_extr_params': {'special_tokens': True, 'agg_metric': 'max'},
     }
 
     # AVAILABLE EXPERIMENTS
     # 'compute_attn', 'attr_to_cls', 'attr_to_cls_entropy', 'word_to_cls', 'entity_to_entity', 'topk_attn_word',
     # 'topk_word_attn_by_attr_similarity'
 
-    experiment = 'entity_to_entity'
+    experiment = 'attr_to_cls'
     sub_experiment = 'simple'  # 'simple', 'comparison'
     use_case_map = ConfCreator().use_case_map
 
@@ -454,7 +459,7 @@ if __name__ == '__main__':
 
             # print("Target categories set to 'all'")
             # target_categories = ['all']
-            comparison = 'tok'  # 'tune', 'tok', 'tune_tok'
+            comparison = 'tune'  # 'tune', 'tok', 'tune_tok'
 
             if comparison == 'tune':
                 new_fine_tune = None
@@ -601,7 +606,7 @@ if __name__ == '__main__':
         template_out_fname = f"{tag}_{conf['tok']}_{sampler_conf['size']}_{fine_tune}_{extractor_name}_{extr_params}"
 
         # SET THIS PARAMS
-        precomputed = True
+        precomputed = False
         multi = True
         target_methods = ['finetune_sentpair', 'finetune_attrpair', 'pretrain_sentpair', 'pretrain_attrpair']
         # target_methods = ['pretrain_sentpair', 'finetune_sentpair']
@@ -613,6 +618,7 @@ if __name__ == '__main__':
             stats_data = execute_experiment_topk_attn_words(use_cases, conf, sampler_conf, fine_tune, attn_params,
                                                             RESULTS_DIR, experiment, target_layer, save_path=res_fname)
             out_plot_name = os.path.join(RESULTS_DIR, f'PLOT_{template_out_fname}.pdf')
+            exit(1)
 
         else:
 

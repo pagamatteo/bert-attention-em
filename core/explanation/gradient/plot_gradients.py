@@ -125,7 +125,8 @@ def plot_batch_grads(grads_data: list, target_entity: str, title_prefix: str = N
 
 
 def plot_multi_use_case_grads(conf, sampler_conf, fine_tune, grads_conf, use_cases, out_dir, grad_agg_metrics=['avg'],
-                              plot_type='box', ignore_special: bool = True, out_plot_name: str = None):
+                              plot_type='box', ignore_special: bool = True, out_plot_name: str = None,
+                              use_case_map=None):
     assert isinstance(use_cases, list), "Wrong data type for parameter 'use_cases'."
     assert len(use_cases) > 0, "Empty use case list."
     grad_agg_available_metrics = ['sum', 'avg', 'median', 'max']
@@ -145,7 +146,7 @@ def plot_multi_use_case_grads(conf, sampler_conf, fine_tune, grads_conf, use_cas
     if len(use_cases) == 1:
         ncols = 1
         nrows = 1
-    fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(20, 12), sharey=True)
+    fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(20, 8), sharey=True)
     if len(use_cases) > 1:
         axes = axes.flat
     # loop over the use cases
@@ -200,11 +201,11 @@ def plot_multi_use_case_grads(conf, sampler_conf, fine_tune, grads_conf, use_cas
             columns.append('[CLS]')
         half_columns = num_columns // 2
         for num in range(1, half_columns + 1):
-            columns.append(f'l_{num}')
+            columns.append(f'l{num}')
         if not ignore_special:
             columns.append('[SEP]')
         for num in range(1, half_columns + 1):
-            columns.append(f'r_{num}')
+            columns.append(f'r{num}')
         if not ignore_special:
             columns.append('[SEP]')
 
@@ -239,10 +240,14 @@ def plot_multi_use_case_grads(conf, sampler_conf, fine_tune, grads_conf, use_cas
             else:
                 raise NotImplementedError("Wrong plot type.")
 
-        ax.set_title(use_case)
+        if use_case_map is not None:
+            ax.set_title(use_case_map[use_case])
+        else:
+            ax.set_title(use_case)
         if idx % ncols == 0:
             ax.set_ylabel('Gradient')
-        ax.set_xlabel('Attributes')
+        if idx // ncols == nrows - 1:
+            ax.set_xlabel('Attributes')
 
     plt.subplots_adjust(wspace=0.1, hspace=0.3)
     if out_plot_name:

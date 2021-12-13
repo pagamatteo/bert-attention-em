@@ -60,7 +60,7 @@ if __name__ == '__main__':
     }
 
     sampler_conf = {
-        'size': 50,
+        'size': None,
         'target_class': 'both',  # 'both', 0, 1
         'seeds': [42, 42],  # [42 -> class 0, 42 -> class 1]
     }

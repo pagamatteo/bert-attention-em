@@ -505,7 +505,7 @@ def plot_pattern_freq(stats, save_path: str = None):
         # ax.set_xlabel("", fontsize=20)
         ax.xaxis.set_tick_params(labelsize=18)
         ax.yaxis.set_tick_params(labelsize=20)
-        ax.set_yticks(np.arange(0, max_val, 10))
+        ax.set_yticks(np.arange(0, max_val, 15))
 
     if len(stats) > 1:
         handles, labels = ax.get_legend_handles_labels()
@@ -603,8 +603,8 @@ def plot_single_pattern_freq_by_layer(stats, small_plot=False, save_path: str = 
         ncols = 4
         nrows = 1
         figsize = (18, 2.5)
-        if legend_items < 4:
-            legend_loc = (0.645, 0.05)
+    if legend_items < 4:
+        legend_loc = (0.645, 0.05)
 
     if len(stats) == 1:
         ncols = 1
@@ -1043,7 +1043,7 @@ if __name__ == '__main__':
 
     if experiment == 'pattern':
         analysis_target = 'benchmark'    # 'use_case', 'benchmark'
-        analysis_type = 'comparison'    # 'simple', 'comparison', 'multi'
+        analysis_type = 'multi'    # 'simple', 'comparison', 'multi'
 
         # plot_params = ['match_attr_attn_loc', 'match_attr_attn_over_mean',
         #                'avg_attr_attn', 'attr_attn_3_last', 'attr_attn_last_1',
@@ -1054,15 +1054,16 @@ if __name__ == '__main__':
                        'avg_attr_attn', 'attr_attn_last_1',
                        'attr_attn_last_2', 'attr_attn_last_3']
         plot_params = ['match_attr_attn_over_mean']
+        # plot_params = ['attr_attn_3_last']
         # plot_params = ['match_attr_attn_loc']
 
         # aggregation
-        # agg_fns = None
-        # target_agg_result_ids = None
-        agg_fns = ['row_mean', 'row_std']
-        target_agg_result_ids = ['match_attr_attn_loc']
+        agg_fns = None
+        target_agg_result_ids = None
+        # agg_fns = ['row_mean', 'row_std']
+        # target_agg_result_ids = ['match_attr_attn_loc']
 
-        categories = ['all']
+        categories = ['true_match']
 
         extractor_name = conf['extractor']['attn_extractor']
         tester_name = conf['tester']['tester']
@@ -1071,7 +1072,7 @@ if __name__ == '__main__':
         if analysis_target == 'use_case':
 
             if analysis_type == 'simple':
-                use_case_analysis(conf, plot_params, categories, agg_fns, target_agg_result_ids)
+                use_case_analysis(conf, plot_params, categories, agg_fns, target_agg_result_ids, plot_type='advanced')
 
             elif analysis_type == 'comparison':
                 comparison_param = 'fine_tune_method'  # 'tok', 'fine_tune_method'
@@ -1103,14 +1104,14 @@ if __name__ == '__main__':
 
                 assert agg_fns is None
                 assert target_agg_result_ids is None
-                assert plot_params == ['match_attr_attn_over_mean']
+                # assert plot_params == ['match_attr_attn_over_mean'] or plot_params == ['attr_attn_3_last']
                 assert len(categories) == 1
 
-                template_file_name = '{}_{}_{}_{}_{}_{}_{}_{}_{}_{}'.format(conf['data_type'], extractor_name, tester_name,
+                template_file_name = '{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}'.format(conf['data_type'], extractor_name, tester_name,
                                                                             conf['fine_tune_method'], conf['permute'],
                                                                             conf['tok'],
                                                                             conf['size'], analysis_target, analysis_type,
-                                                                            agg_metric)
+                                                                            agg_metric, categories[0])
 
                 confs = conf_creator.get_confs(conf, ['use_case'])
                 imgs = []
@@ -1157,7 +1158,7 @@ if __name__ == '__main__':
     elif experiment == 'pattern_freq':
         analysis_type = 'comparison'    # 'simple', 'comparison'
         # experiments: 'all_freq', 'match_freq_by_layer', 'entropy_by_layer', 'vertical_loc', 'quadrant_vertical_freq'
-        sub_experiment = 'all_freq'
+        sub_experiment = 'match_freq_by_layer'
 
         conf['use_case'] = use_cases
         categories = ['all']
@@ -1188,7 +1189,7 @@ if __name__ == '__main__':
             plot_sub_experiment_results(res, sub_experiment, save_path)
 
         elif analysis_type == 'comparison':
-            comparison = 'tune_tok'  # 'tune', 'tok', 'tune_tok'
+            comparison = 'tune'  # 'tune', 'tok', 'tune_tok'
 
             if comparison == 'tune':
                 new_conf = conf.copy()
@@ -1213,7 +1214,7 @@ if __name__ == '__main__':
 
                 save_path = os.path.join(RESULTS_DIR, f'PLOT_PATTERN_{template_file_name}.pdf')
 
-                plot_sub_experiment_results(plot_res, sub_experiment, save_path)
+                plot_sub_experiment_results(plot_res, sub_experiment, save_path=save_path)
 
             elif comparison == 'tok':
                 new_conf = conf.copy()
@@ -1281,7 +1282,7 @@ if __name__ == '__main__':
 
                 save_path = os.path.join(RESULTS_DIR, f'PLOT_PATTERN_{template_file_name}.pdf')
 
-                plot_sub_experiment_results(plot_res, sub_experiment, small_plot, save_path)
+                plot_sub_experiment_results(plot_res, sub_experiment, small_plot, save_path=save_path)
 
         else:
             raise NotImplementedError()

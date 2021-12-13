@@ -11,6 +11,7 @@ from core.explanation.gradient.extractors import EntityGradientExtractor
 from core.explanation.gradient.analyzers import TopKGradientAnalyzer
 import pickle
 from multiprocessing import Process
+from utils.test_utils import ConfCreator
 
 
 PROJECT_DIR = Path(__file__).parent.parent
@@ -90,7 +91,7 @@ if __name__ == '__main__':
     # use_cases = ["Structured_Amazon-Google", "Structured_Walmart-Amazon", "Textual_Abt-Buy", "Dirty_Walmart-Amazon"]#, "Textual_Abt-Buy"]
     # use_cases = ["Structured_iTunes-Amazon", "Textual_Abt-Buy", "Dirty_iTunes-Amazon", "Dirty_DBLP-ACM",
     #              "Dirty_DBLP-GoogleScholar", "Dirty_Walmart-Amazon"]
-    use_cases = ["Structured_Fodors-Zagats", "Structured_Beer"]
+    # use_cases = ["Structured_Fodors-Zagats", "Structured_Beer"]
 
     conf = {
         'data_type': 'train',  # 'train', 'test', 'valid'
@@ -113,17 +114,18 @@ if __name__ == '__main__':
     fine_tune = 'simple'  # None, 'simple', 'advanced'
 
     grad_conf = {
-        'text_unit': 'words',
+        'text_unit': 'attrs',
         'special_tokens': True,
         'agg': None,  # 'mean'
         'agg_target_cat': ['all', 'all_pos', 'all_neg', 'all_pred_pos', 'all_pred_neg', 'tp', 'tn', 'fp', 'fn']
     }
 
     # 'compute_grad', 'plot_grad', 'topk_word_grad', 'topk_word_grad_by_attr', 'topk_word_grad_by_attr_similarity'
-    experiment = 'topk_word_grad_by_attr_similarity'
+    experiment = 'plot_grad'
 
     # [END] PARAMS
 
+    use_case_map = ConfCreator().use_case_map
     start = time.time()
 
     if experiment == 'compute_grad':
@@ -160,7 +162,8 @@ if __name__ == '__main__':
                                          f"grad_{conf['tok']}_{sampler_conf['size']}_{grad_conf['text_unit']}_{grad_agg_metric}.pdf")
             plot_multi_use_case_grads(conf, sampler_conf, fine_tune, grad_conf, use_cases, RESULT_DIR,
                                       grad_agg_metrics=[grad_agg_metric], plot_type='box',
-                                      ignore_special=ignore_special, out_plot_name=out_plot_name)
+                                      ignore_special=ignore_special, out_plot_name=out_plot_name,
+                                      use_case_map=use_case_map)
             # plot_multi_use_case_grads(conf, sampler_conf, fine_tune, grad_conf, use_cases, RESULT_DIR,
             #                           grad_agg_metrics=['max', 'avg'], plot_type='error',
             #                           ignore_special=ignore_special)
